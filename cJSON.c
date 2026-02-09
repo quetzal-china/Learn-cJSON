@@ -308,11 +308,14 @@ CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
     cJSON *next = NULL;
     while (item != NULL)
     {
-        next = item->next;
+        next = item->next;// 先保存下一个节点
         if (!(item->type & cJSON_IsReference) && (item->child != NULL))
         {
+            /* 递归删除 */
             cJSON_Delete(item->child);
         }
+        // cJSON_IsReference: 标记 valuestring 和 child 是否为引用
+        // cJSON_StringIsConst: 标记 string 是否为常量
         if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
         {
             global_hooks.deallocate(item->valuestring);
@@ -324,7 +327,8 @@ CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
             item->string = NULL;
         }
         global_hooks.deallocate(item);
-        item = next;
+        item = next;// 移动到下一个节点
+
     }
 }
 
