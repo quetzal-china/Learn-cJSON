@@ -71,7 +71,8 @@
 #define false ((cJSON_bool)0)
 
 /* define isnan and isinf for ANSI C, if in C99 or above, isnan and isinf has been defined in math.h */
-/* 疑问：极大值的判断原理：？ */
+/* 疑问：极大值的判断原理：? */
+/* isinf 通过"无穷大减自身得 NaN，但本身不是 NaN"这一特性来检测无穷大。 */
 #ifndef isinf
 #define isinf(d) (isnan((d - d)) && !isnan(d))
 #endif
@@ -81,6 +82,10 @@
 #endif
 
 /* 查阅：这是什么意思？ */
+/* NAN（Not a Number）在 C99 前未标准化，需要手动定义：
+    - Windows 平台用 sqrt(-1.0) 产生 NaN
+    - 其他平台用 0.0/0.0 （除零）产生 NaN 
+*/
 #ifndef NAN
 #ifdef _WIN32
 #define NAN sqrt(-1.0)
@@ -104,8 +109,10 @@ CJSON_PUBLIC(const char *) cJSON_GetErrorPtr(void)
 }
 
 /* 疑问：为什么在这里使用char* 而不是const char* ? */
+/* 解答：cJSON 选择兼容旧代码，早期 cJSON 版本没有 const 修饰，若改为 const char* 会破坏依赖此函数的旧代码。 */
 /* 疑问：(const cJSON * const item) 是什么东西？ */
 /* 是不是(const cJSON)类型的指针，变量名字叫做item， 并且用const双重修饰确保地址和值都不会改变？ */
+/* 解答：双重 const 同时保护"指针指向的数据"和"指针存储的地址"都不被修改。 */
 CJSON_PUBLIC(char *) cJSON_GetStringValue(const cJSON * const item)
 {
     if (!cJSON_IsString(item))
@@ -118,6 +125,11 @@ CJSON_PUBLIC(char *) cJSON_GetStringValue(const cJSON * const item)
 
 /* 疑问：为什么没有调用valueint的函数? */
 /* 补充：h文件cJSON_SetIntValue(object, number)函数实现了int储存double */
+/* cJSON 内部 统一用 double 存储数字 ， valueint 仅作兼容保留（已标记为 DEPRECATED）。原因：
+    - JSON 标准不区分整数和浮点数
+    - double 可表示更大范围和精度
+    - 通过 cJSON_SetIntValue 宏可同时设置两者 
+*/
 CJSON_PUBLIC(double) cJSON_GetNumberValue(const cJSON * const item)
 {
     if (!cJSON_IsNumber(item))
@@ -144,9 +156,10 @@ CJSON_PUBLIC(const char*) cJSON_Version(void)
 }
 
 /* Case insensitive string comparison, doesn't consider two NULL pointers equal though */
-/* 模糊比较 */
 /* 疑问：static int? */
-/* 返回值：0->相等； 1->不相等， 其他int值表示大小关系 */
+/* 回答：case_insensitive_strcmp函数是内部辅助函数，无需暴露 */
+/* 返回值：0表示相等，正数表示大于，负数表示小于 */
+/* 注意：返回值1有两种可能！ */
 static int case_insensitive_strcmp(const unsigned char *string1, const unsigned char *string2)
 {
     if ((string1 == NULL) || (string2 == NULL))
@@ -171,6 +184,10 @@ static int case_insensitive_strcmp(const unsigned char *string1, const unsigned 
 }
 
 /* 疑问：内部钩子，啥意思？ */
+/* 回答："钩子"（Hooks）是 函数指针结构体 ，允许用户自定义内存管理：
+    - 默认使用标准 malloc/free/realloc
+    - 用户可通过 cJSON_InitHooks 替换为自定义分配器（如内存池、调试分配器）
+ */
 typedef struct internal_hooks
 {
     void *(CJSON_CDECL *allocate)(size_t size);
@@ -202,6 +219,9 @@ static void * CJSON_CDECL internal_realloc(void *pointer, size_t size)
 /* strlen of character literals resolved at compile time */
 /* 在编译时就确定的字符串字面量长度 */
 /* 疑问：为什么要写这个函数呢？strlen返回不支持static吗 */
+/* 回答：这是编译期计算字符串长度的宏，相比于strlen()，是编译器计算，没有运行时开销；
+                                                可以用于static数组大小定义。
+*/
 #define static_strlen(string_literal) (sizeof(string_literal) - sizeof(""))
 
 /* global_hooks现在是全局统一的内存分配管理方法，类型为static internal_hooks，正是针对系统编译环境特殊化处理的 */
