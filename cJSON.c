@@ -250,8 +250,12 @@ static unsigned char* cJSON_strdup(const unsigned char* string, const internal_h
 }
 
 /* 用于初始化工具集，细节存疑 */
+/* 内存管理钩子初始化函数 ，允许用户自定义内存分配和释放策略 */
 CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 {
+    /* 
+    如果传入空的cJSON_Hooks指针,则初始化global_hooks为malloc, free, realloc
+    */
     if (hooks == NULL)
     {
         /* Reset hooks */
@@ -274,6 +278,10 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
     }
 
     /* use realloc only if both free and malloc are used */
+    /*
+    只有当分配和释放函数都是标准库函数时，才启用 realloc
+    保证内存管理的一致性
+    */
     global_hooks.reallocate = NULL;
     if ((global_hooks.allocate == malloc) && (global_hooks.deallocate == free))
     {
