@@ -489,6 +489,7 @@ loop_end:
     if (number_c_string == after_end)
     {
         /* free the temporary buffer */
+        /* 释放临时数字字符串内存 */
         input_buffer->hooks.deallocate(number_c_string);
         return false; /* parse_error */
     }
@@ -496,6 +497,7 @@ loop_end:
     item->valuedouble = number;
 
     /* use saturation in case of overflow */
+    /* 处理整数溢出情况 */
     if (number >= INT_MAX)
     {
         item->valueint = INT_MAX;
@@ -506,6 +508,7 @@ loop_end:
     }
     else
     {
+        /* (int)整型转换的规则是: 截断小数部分，但超出范围时行为未定义 */
         item->valueint = (int)number;
     }
 
@@ -513,6 +516,7 @@ loop_end:
 
     input_buffer->offset += (size_t)(after_end - number_c_string);
     /* free the temporary buffer */
+    /* 释放临时数字字符串内存 */
     input_buffer->hooks.deallocate(number_c_string);
     return true;
 }
@@ -537,12 +541,17 @@ CJSON_PUBLIC(double) cJSON_SetNumberHelper(cJSON *object, double number)
 }
 
 /* Note: when passing a NULL valuestring, cJSON_SetValuestring treats this as an error and return NULL */
+/* 设置cJSON项的字符串值 */
+/* 若object类型不是cJSON_String或已引用，返回NULL */
+/* 若valuestring为空，返回NULL */
+/* 若valuestring长度小于等于当前valuestring，直接复制；否则分配新内存复制 */
 CJSON_PUBLIC(char*) cJSON_SetValuestring(cJSON *object, const char *valuestring)
 {
     char *copy = NULL;
     size_t v1_len;
     size_t v2_len;
     /* if object's type is not cJSON_String or is cJSON_IsReference, it should not set valuestring */
+    /* 若object类型不是cJSON_String或已引用，返回NULL */
     if ((object == NULL) || !(object->type & cJSON_String) || (object->type & cJSON_IsReference))
     {
         return NULL;

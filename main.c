@@ -25,7 +25,6 @@ int main(void)
     printf("Is Student: %s\n", cJSON_IsTrue(is_student) ? "true" : "false");
     
     printf("Courses: ");
-    cJSON *course = NULL;
     cJSON_ArrayForEach(course, courses)
     {
         printf("%s ", cJSON_GetStringValue(course));
