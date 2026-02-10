@@ -97,3 +97,57 @@ internal_hooks 的作用不只是“允许替换内存分配函数”，
 【待验证问题】
 - 在更大规模或更复杂的项目中，全局内存管理机制可能会带来哪些问题？
 
+### 2026-02-10 | strtod 使用中的 unsigned char** 类型转换问题
+
+【背景触发】
+在阅读 cJSON.c 中 parse_number 的实现时，
+我注意到代码为了调用 strtod，将 unsigned char** 强制转换为 char**，
+这让我对这种类型转换的安全性产生了疑问。
+
+【最初直觉】
+我一开始认为 unsigned char** 和 char** 在类型兼容方面是安全的，
+因为 char** 可以看作是 unsigned char** 的一种“通用形式”，
+这种转换在实际使用中应该不会出问题。
+
+【事实与证据】
+- strtod 的函数原型要求传入 char** 作为 endptr 参数
+  - 函数原型: 
+   `double strtod(const char *nptr, char **endptr);`
+- cJSON 内部解析使用的是 unsigned char* 来处理输入字符
+- 在调用 strtod 前，代码对指针做了显式的强制类型转换
+- strtod 的行为仅是移动指针位置，并不修改字符串内容
+```c
+/* Convert a string to a floating-point number.  */
+extern double strtod (const char *__restrict __nptr,
+		      char **__restrict __endptr)
+     __THROW __nonnull ((1));
+```
+
+【认知修正】
+我意识到，这里的类型转换并不是“类型系统保证安全”，
+而是**基于对 strtod 行为的假设**：
+
+只要 strtod 不通过 endptr 修改指向的数据内容，
+而只是写入“指针的位置”，
+那么这种转换在当前使用场景下是可接受的。
+
+也就是说，这是一种**依赖约定而非类型安全的做法**。
+
+【设计取舍】
+为了复用标准库的 strtod，
+cJSON 选择接受一次不完全类型安全的转换，
+以避免：
+- 重新实现数字解析逻辑
+- 引入额外的复杂代码
+
+这是在用“对库行为的信任”换取实现上的简洁。
+
+【可迁移的工程结论】
+在 C 代码中：
+- 某些类型转换在语义上是安全的，但类型系统无法表达
+- 这种转换应尽量集中、显式出现，并伴随清晰的使用前提
+- 如果对被调用函数的行为不确定，应避免此类做法
+
+【待验证问题】
+- C 标准是否对 strtod 使用 endptr 的行为有明确保证？
+- 在不同实现的 libc 中，这种用法是否始终安全？

@@ -388,6 +388,15 @@ typedef struct
 /* 解析解析缓冲区中的数字字符串，将结果存储到item中 */
 /* 采用宏定义, 直接在代码中展开, 避免函数调用的开销 */
 /* item 表示cJSON项指针, input_buffer 表示解析缓冲区指针 */
+/*
+ * 1. 解析前状态
+ * - input_buffer->offset 指向数字的 开始位置
+ * - number_string_length 初始为 0
+ * 2. 解析过程（循环）
+ * - offset 保持不变 ，始终指向数字开始
+ * - number_string_length 递增，记录数字字符串长度
+ * - 通过 buffer_at_offset(input_buffer)[number_string_length] 访问每个字符，判断是否为数字字符
+ */
 static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_buffer)
 {
     double number = 0;                      // 解析得到的数字
@@ -462,7 +471,20 @@ loop_end:
             }
         }
     }
-
+    /* 调用strtod解析临时数字字符串 */
+    /* strtod 函数解析原理: 
+        - 从左到右扫描字符串，跳过前导空格
+        - 可选正负号
+        - 整数部分（可选）
+        - 小数点（可选）
+        - 小数部分（可选）
+        - 指数部分（可选，e/E 开头）
+        - 可选后缀空格
+        - 返回解析到的 double 值
+    */
+    /* 由于strtod 函数是根据当前系统的区域设置（locale）来解析数字, 所以在此之前完成了小数点替换 */
+    /* 函数原型: double strtod(const char *nptr, char **endptr); */
+    /* unsigned char**转换为char**通常是安全的 */
     number = strtod((const char*)number_c_string, (char**)&after_end);
     if (number_c_string == after_end)
     {
