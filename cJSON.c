@@ -333,24 +333,33 @@ CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
 }
 
 /* get the decimal point character of the current locale */
+/* 内部工具函数：返回当前区域设置（locale）中用于浮点小数的分隔符。
+ * 在 ENABLE_LOCALES 开启时，通过 localeconv() 查询 lconv->decimal_point；
+ * 否则默认返回 '.'，保证后续 strtod/printf 系列函数在解析或打印数字时
+ * 使用正确的分隔符，防止因区域差异（如德文 ","）导致解析失败。 */
 static unsigned char get_decimal_point(void)
 {
 #ifdef ENABLE_LOCALES
     struct lconv *lconv = localeconv();
-    return (unsigned char) lconv->decimal_point[0];
+    /* 添加NULL检查 */
+    if (lconv && lconv->decimal_point && lconv->decimal_point[0])
+    {
+        return (unsigned char) lconv->decimal_point[0];
+    }
 #else
     return '.';
 #endif
 }
 
+// 解析缓冲区结构体
 typedef struct
 {
-    const unsigned char *content;
-    size_t length;
-    size_t offset;
-    size_t depth; /* How deeply nested (in arrays/objects) is the input at the current offset. */
-    internal_hooks hooks;
-} parse_buffer;
+    const unsigned char *content;   // 指向解析缓冲区的指针
+    size_t length;                  // 缓冲区总长度
+    size_t offset;                  // 当前解析位置偏移量
+    size_t depth;                   // 当前解析深度
+    internal_hooks hooks;           // 内存管理钩子，用于自定义内存分配
+} parse_buffer;     
 
 /* check if the given size is left to read in a given parse buffer (starting with 1) */
 #define can_read(buffer, size) ((buffer != NULL) && (((buffer)->offset + size) <= (buffer)->length))
@@ -527,6 +536,7 @@ CJSON_PUBLIC(char*) cJSON_SetValuestring(cJSON *object, const char *valuestring)
     return copy;
 }
 
+// 打印缓冲区结构体
 typedef struct
 {
     unsigned char *buffer;
