@@ -5,6 +5,7 @@
       "includePath": [
         "${workspaceFolder}/**"
       ],
+      "defines": [],
       "compilerPath": "/usr/bin/gcc",
       "cStandard": "${default}",
       "cppStandard": "${default}",
@@ -12,13 +13,12 @@
       "compilerArgs": [],
       "browse": {
         "path": [
-          "${workspaceFolder}/**",
-          "/usr/include/**",
-          "/usr/lib/gcc/x86_64-linux-gnu/10/include/**",
-          "/usr/lib/llvm-12/lib/clang/12.0.0/include/**",
-          "/usr/local/include/**"
+          "${workspaceFolder}",
+          "/usr/include",
+          "/usr/include/x86_64-linux-gnu",
+          "/usr/lib/gcc/x86_64-linux-gnu/9/include"
         ],
-        "limitSymbolsToIncludedHeaders": true,
+        "limitSymbolsToIncludedHeaders": false,
         "databaseFilename": ""
       }
     }
