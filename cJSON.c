@@ -362,23 +362,41 @@ typedef struct
 } parse_buffer;     
 
 /* check if the given size is left to read in a given parse buffer (starting with 1) */
+/* 检查解析缓冲区是否还有足够的空间用于读取指定大小的数据 */
+/* 采用宏定义, 直接在代码中展开, 避免函数调用的开销 */
+/* buffer 表示解析缓冲区指针, size 表示待读取数据大小 */
 #define can_read(buffer, size) ((buffer != NULL) && (((buffer)->offset + size) <= (buffer)->length))
 /* check if the buffer can be accessed at the given index (starting with 0) */
+/* 检查解析缓冲区是否可以访问指定索引位置的数据 */
+/* 采用宏定义, 直接在代码中展开, 避免函数调用的开销 */
+/* buffer 表示解析缓冲区指针, index 表示待访问索引 */
 #define can_access_at_index(buffer, index) ((buffer != NULL) && (((buffer)->offset + index) < (buffer)->length))
+/* 检查解析缓冲区是否不能访问指定索引位置的数据 */
+/* 采用宏定义, 直接在代码中展开, 避免函数调用的开销 */
+/* buffer 表示解析缓冲区指针, index 表示待访问索引 */
+/* 直接表达"不能访问"的语义，而不是使用 !can_access_at_index 这样的双重否定 */
 #define cannot_access_at_index(buffer, index) (!can_access_at_index(buffer, index))
 /* get a pointer to the buffer at the position */
+/* 获取解析缓冲区当前偏移量位置的指针 */
+/* 采用宏定义, 直接在代码中展开, 避免函数调用的开销 */
+/* buffer 表示解析缓冲区指针 */
+/* content 是解析缓冲区指向的内存区域 */
+/* ((buffer)->content + (buffer)->offset) 表示解析缓冲区当前偏移量位置的指针 */
 #define buffer_at_offset(buffer) ((buffer)->content + (buffer)->offset)
 
 /* Parse the input text to generate a number, and populate the result into item. */
+/* 解析解析缓冲区中的数字字符串，将结果存储到item中 */
+/* 采用宏定义, 直接在代码中展开, 避免函数调用的开销 */
+/* item 表示cJSON项指针, input_buffer 表示解析缓冲区指针 */
 static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_buffer)
 {
-    double number = 0;
-    unsigned char *after_end = NULL;
-    unsigned char *number_c_string;
-    unsigned char decimal_point = get_decimal_point();
-    size_t i = 0;
-    size_t number_string_length = 0;
-    cJSON_bool has_decimal_point = false;
+    double number = 0;                      // 解析得到的数字
+    unsigned char *after_end = NULL;        // 指向数字字符串结束后的下一个字符的指针
+    unsigned char *number_c_string;        // 用于存储临时数字字符串的指针
+    unsigned char decimal_point = get_decimal_point();  // 当前区域设置的小数分隔符
+    size_t i = 0;                       // 循环索引变量
+    size_t number_string_length = 0;    // 数字字符串长度
+    cJSON_bool has_decimal_point = false; // 是否包含小数点
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL))
     {
@@ -388,10 +406,13 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
     /* copy the number into a temporary buffer and replace '.' with the decimal point
      * of the current locale (for strtod)
      * This also takes care of '\0' not necessarily being available for marking the end of the input */
+    /* 遍历解析缓冲区，构建临时数字字符串 */
     for (i = 0; can_access_at_index(input_buffer, i); i++)
     {
         switch (buffer_at_offset(input_buffer)[i])
+        /* buffer_at_offset(input_buffer)[i] 表示当前解析位置的字符 */
         {
+            /* 以下字符都是数字字符 */
             case '0':
             case '1':
             case '2':
@@ -408,18 +429,19 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
             case 'E':
                 number_string_length++;
                 break;
-
+            /* 小数点字符 */
             case '.':
                 number_string_length++;
                 has_decimal_point = true;
                 break;
-
+            /* default 出现了非数字字符，跳出循环 */
             default:
                 goto loop_end;
         }
     }
 loop_end:
     /* malloc for temporary buffer, add 1 for '\0' */
+    /* 为临时数字字符串分配内存，额外预留1个字节用于 '\0' 结束符 */
     number_c_string = (unsigned char *) input_buffer->hooks.allocate(number_string_length + 1);
     if (number_c_string == NULL)
     {
