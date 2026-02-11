@@ -290,7 +290,7 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 }
 
 /* Internal constructor. */
-/* 构建一个新的cJSON项 */
+/* 构建一个新的cJSON项, 使用传入的内存管理钩子(实际调用时为global_hooks) */
 static cJSON *cJSON_New_Item(const internal_hooks * const hooks)
 {
     cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));
