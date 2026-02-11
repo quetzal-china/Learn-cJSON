@@ -87,6 +87,10 @@ then using the CJSON_API_VISIBILITY flag to "export" the same symbols the way CJ
 #include <stddef.h>
 
 /* cJSON Types: */
+/* 组合标签: 使用 | 运算符 */
+/* 例如: cJSON_String | cJSON_IsReference 表示一个引用字符串 */
+/* 判断标签: 使用 & 运算符 */
+/* 例如: item->type & cJSON_String 判断 item 是否为字符串 */
 #define cJSON_Invalid (0)
 #define cJSON_False  (1 << 0)
 #define cJSON_True   (1 << 1)
