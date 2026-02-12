@@ -1094,6 +1094,7 @@ fail:
 }
 
 /* Render the cstring provided to an escaped version that can be printed. */
+/* 将所提供的 CString 对象转换为一个经过转义处理的版本, 使其能够被安全地打印 */
 static cJSON_bool print_string_ptr(const unsigned char * const input, printbuffer * const output_buffer)
 {
     const unsigned char *input_pointer = NULL;
