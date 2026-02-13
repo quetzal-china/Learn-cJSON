@@ -351,7 +351,7 @@ static unsigned char get_decimal_point(void)
 #endif
 }
 
-// 解析缓冲区结构体
+// 解析缓冲区结构体, 用于存储解析后的JSON字符串和相关信息
 typedef struct
 {
     const unsigned char *content;   // 指向解析缓冲区的指针
@@ -1217,12 +1217,16 @@ static cJSON_bool print_string_ptr(const unsigned char * const input, printbuffe
 }
 
 /* Invoke print_string_ptr (which is useful) on an item. */
+/* 包装函数, 包装底层函数print_string_ptr, 是工程思维 */
 static cJSON_bool print_string(const cJSON * const item, printbuffer * const p)
 {
     return print_string_ptr((unsigned char*)item->valuestring, p);
 }
 
 /* Predeclare these prototypes. */
+/* 提前声明函数原型 */
+/* prase解析类型的函数是cJSON * const item */
+/* print打印类型的函数是const cJSON * const item */
 static cJSON_bool parse_value(cJSON * const item, parse_buffer * const input_buffer);
 static cJSON_bool print_value(const cJSON * const item, printbuffer * const output_buffer);
 static cJSON_bool parse_array(cJSON * const item, parse_buffer * const input_buffer);
@@ -1231,23 +1235,25 @@ static cJSON_bool parse_object(cJSON * const item, parse_buffer * const input_bu
 static cJSON_bool print_object(const cJSON * const item, printbuffer * const output_buffer);
 
 /* Utility to jump whitespace and cr/lf */
+/* 用于跳过缓冲区中的空白字符和控制符的内部工具函数 */
 static parse_buffer *buffer_skip_whitespace(parse_buffer * const buffer)
 {
+    // 判断缓冲区是否有效
     if ((buffer == NULL) || (buffer->content == NULL))
     {
         return NULL;
     }
-
+    // 判断可否访问
     if (cannot_access_at_index(buffer, 0))
     {
         return buffer;
     }
-
+    /* 跳过31个控制符和第32个空格符(参考ASCII表) */
     while (can_access_at_index(buffer, 0) && (buffer_at_offset(buffer)[0] <= 32))
     {
        buffer->offset++;
     }
-
+    // 边界保护机制, 回退一步到最后一个字符处, 防止缓冲区越界访问
     if (buffer->offset == buffer->length)
     {
         buffer->offset--;
