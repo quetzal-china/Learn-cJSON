@@ -1263,6 +1263,7 @@ static parse_buffer *buffer_skip_whitespace(parse_buffer * const buffer)
 }
 
 /* skip the UTF-8 BOM (byte order mark) if it is at the beginning of a buffer */
+/* 跳过缓冲区开头的 UTF-8 字节顺序标记 (BOM) */
 static parse_buffer *skip_utf8_bom(parse_buffer * const buffer)
 {
     if ((buffer == NULL) || (buffer->content == NULL) || (buffer->offset != 0))
@@ -1278,7 +1279,16 @@ static parse_buffer *skip_utf8_bom(parse_buffer * const buffer)
     return buffer;
 }
 
-CJSON_PUBLIC(cJSON *) cJSON_ParseWithOpts(const char *value, const char **return_parse_end, cJSON_bool require_null_terminated)
+/// @brief 
+/// @param value 
+/// @param return_parse_end 
+/// @param require_null_terminated 
+/// @return 
+CJSON_PUBLIC(cJSON *) cJSON_ParseWithOpts(
+    const char *value,                      // 要解析的 JSON 字符串
+    const char **return_parse_end,          // 返回解析结束位置的指针
+    cJSON_bool require_null_terminated      // 是否要求 JSON 后必须有 '\0'
+)
 {
     size_t buffer_length;
 
@@ -1288,6 +1298,8 @@ CJSON_PUBLIC(cJSON *) cJSON_ParseWithOpts(const char *value, const char **return
     }
 
     /* Adding null character size due to require_null_terminated. */
+    /* 如果要求 JSON 后必须有 '\0'，则缓冲区长度需要额外 +1 */
+    /* sizeof("")返回1, 表示字符串结束符 '\0' */
     buffer_length = strlen(value) + sizeof("");
 
     return cJSON_ParseWithLengthOpts(value, buffer_length, return_parse_end, require_null_terminated);
