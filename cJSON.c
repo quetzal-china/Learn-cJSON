@@ -1306,12 +1306,19 @@ CJSON_PUBLIC(cJSON *) cJSON_ParseWithOpts(
 }
 
 /* Parse an object - create a new root, and populate. */
-CJSON_PUBLIC(cJSON *) cJSON_ParseWithLengthOpts(const char *value, size_t buffer_length, const char **return_parse_end, cJSON_bool require_null_terminated)
+/* 解析 JSON 对象字符串, 创建新的根项, 并填充其内容 */
+CJSON_PUBLIC(cJSON *) cJSON_ParseWithLengthOpts(
+    const char *value,       // 要解析的 JSON 字符串
+    size_t buffer_length,    // 字符串长度
+    const char **return_parse_end, // 返回解析结束位置的指针
+    cJSON_bool require_null_terminated // 是否要求 JSON 后必须有 '\0'
+)
 {
     parse_buffer buffer = { 0, 0, 0, 0, { 0, 0, 0 } };
     cJSON *item = NULL;
 
     /* reset error position */
+    /* 重置全局错误位置, 准备新的解析 */
     global_error.json = NULL;
     global_error.position = 0;
 
@@ -1331,6 +1338,7 @@ CJSON_PUBLIC(cJSON *) cJSON_ParseWithLengthOpts(const char *value, size_t buffer
         goto fail;
     }
 
+    /* 先跳过 UTF-8 BOM, 再跳过空白字符, 然后解析 JSON 内容 */
     if (!parse_value(item, buffer_skip_whitespace(skip_utf8_bom(&buffer))))
     {
         /* parse failure. ep is set. */
@@ -1338,6 +1346,7 @@ CJSON_PUBLIC(cJSON *) cJSON_ParseWithLengthOpts(const char *value, size_t buffer
     }
 
     /* if we require null-terminated JSON without appended garbage, skip and then check for a null terminator */
+    /* 如果要求 JSON 后必须有 '\0'，则跳过空白字符后检查是否有 '\0' */
     if (require_null_terminated)
     {
         buffer_skip_whitespace(&buffer);
