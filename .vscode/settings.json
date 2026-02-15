@@ -99,6 +99,10 @@
     "typeinfo": "cpp",
     "utility": "cpp",
     "condition_variable": "cpp",
-    "typeindex": "cpp"
+    "typeindex": "cpp",
+    "deque": "c",
+    "list": "c",
+    "vector": "c",
+    "initializer_list": "c"
   }
 }

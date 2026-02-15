@@ -1,7 +1,7 @@
+#if 0
 #include "cJSON.h"
 #include <stdio.h>
 #include <stdlib.h>
-
 int main(void)
 {
     const char *json_string = "{\"name\":\"John\",\"age\":30,\"is_student\":false,\"courses\":[\"math\",\"english\"]}";
@@ -35,5 +35,24 @@ int main(void)
     
     cJSON_Delete(root);
     
+    return 0;
+}
+#endif
+
+#include "cJSON.h"
+#include <stdio.h>
+int main(void)
+{
+    printf("=== 测试 cJSON_CreateNull ===\n");
+    
+    cJSON *null_item = cJSON_CreateNull();  // ← 我们要追踪这里
+    
+    if (null_item != NULL) {
+        printf("创建成功！\n");
+        printf("类型值: %d\n", null_item->type);
+        printf("cJSON_NULL = %d\n", cJSON_NULL);
+    }
+    
+    cJSON_Delete(null_item);
     return 0;
 }
