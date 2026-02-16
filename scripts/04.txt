@@ -1,0 +1,300 @@
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb) break cJSON_Delete
+Breakpoint 1 at 0x1678: file cJSON.c, line 307.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+=== 测试递归删除 ===
+JSON: {"name":"test","items":[{"key":"value1"},{"key":"value2"}],"nested":{"inner":"data"}}
+
+解析成功！
+根节点地址: 0x55555555f6b0
+
+Breakpoint 1, cJSON_Delete (item=0x7fffffffd210) at cJSON.c:307
+307     {
+(gdb) next
+308         cJSON *next = NULL;
+(gdb) next
+309         while (item != NULL)
+(gdb) print item
+$1 = (cJSON *) 0x55555555f6b0
+(gdb) print *item
+$2 = {next = 0x0, prev = 0x0, child = 0x55555555f700, type = 64, valuestring = 0x0, valueint = 0, valuedouble = 0, 
+  string = 0x0}
+(gdb) n
+311             next = item->next;// 先保存下一个节点
+(gdb) n
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+(gdb) print item->child
+$3 = (struct cJSON *) 0x55555555f700
+(gdb) print *item
+$4 = {next = 0x0, prev = 0x0, child = 0x55555555f700, type = 64, valuestring = 0x0, valueint = 0, valuedouble = 0, 
+  string = 0x0}
+(gdb) next
+315                 cJSON_Delete(item->child);
+(gdb) step
+
+Breakpoint 1, cJSON_Delete (item=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:307
+307     {
+(gdb) finish
+Run till exit from #0  cJSON_Delete (item=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:307
+
+Breakpoint 1, cJSON_Delete (item=0x5555555551e0 <_start>) at cJSON.c:307
+307     {
+(gdb) bt
+#0  cJSON_Delete (item=0x5555555551e0 <_start>) at cJSON.c:307
+#1  0x00005555555556cd in cJSON_Delete (item=0x55555555f790) at cJSON.c:315
+#2  0x00005555555556cd in cJSON_Delete (item=0x55555555f6b0) at cJSON.c:315
+#3  0x000055555555535e in main () at main.c:94
+(gdb) next
+308         cJSON *next = NULL;
+(gdb) next
+309         while (item != NULL)
+(gdb) print item
+$5 = (cJSON *) 0x55555555f800
+(gdb) print *item
+$6 = {next = 0x55555555f8e0, prev = 0x55555555f8e0, child = 0x55555555f850, type = 64, valuestring = 0x0, 
+  valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) next
+311             next = item->next;// 先保存下一个节点
+(gdb) next
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+(gdb) next
+315                 cJSON_Delete(item->child);
+(gdb) step
+
+Breakpoint 1, cJSON_Delete (item=0x55555555f6b0) at cJSON.c:307
+307     {
+(gdb) bt
+#0  cJSON_Delete (item=0x55555555f6b0) at cJSON.c:307
+#1  0x00005555555556cd in cJSON_Delete (item=0x55555555f800) at cJSON.c:315
+#2  0x00005555555556cd in cJSON_Delete (item=0x55555555f790) at cJSON.c:315
+#3  0x00005555555556cd in cJSON_Delete (item=0x55555555f6b0) at cJSON.c:315
+#4  0x000055555555535e in main () at main.c:94
+(gdb) next
+308         cJSON *next = NULL;
+(gdb) next
+309         while (item != NULL)
+(gdb) print *item
+$7 = {next = 0x0, prev = 0x55555555f850, child = 0x0, type = 16, valuestring = 0x55555555f8c0 "value1", 
+  valueint = 0, valuedouble = 0, string = 0x55555555f8a0 "key"}
+(gdb) next
+311             next = item->next;// 先保存下一个节点
+(gdb) print *item
+$8 = {next = 0x0, prev = 0x55555555f850, child = 0x0, type = 16, valuestring = 0x55555555f8c0 "value1", 
+  valueint = 0, valuedouble = 0, string = 0x55555555f8a0 "key"}
+(gdb) next
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+(gdb) next
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) next
+321                 global_hooks.deallocate(item->valuestring);
+(gdb) next
+322                 item->valuestring = NULL;
+(gdb) next
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) next
+326                 global_hooks.deallocate(item->string);
+(gdb) next
+327                 item->string = NULL;
+(gdb) next
+329             global_hooks.deallocate(item);
+(gdb) print *item
+$9 = {next = 0x0, prev = 0x55555555f850, child = 0x0, type = 16, valuestring = 0x0, valueint = 0, valuedouble = 0, 
+  string = 0x0}
+(gdb) next
+330             item = next;// 移动到下一个节点
+(gdb) next
+309         while (item != NULL)
+(gdb) print next
+$10 = (cJSON *) 0x0
+(gdb) print *item
+Cannot access memory at address 0x0
+(gdb) fin
+Run till exit from #0  cJSON_Delete (item=0x0) at cJSON.c:309
+cJSON_Delete (item=0x55555555f800) at cJSON.c:319
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) next
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) next
+329             global_hooks.deallocate(item);
+(gdb) next
+330             item = next;// 移动到下一个节点
+(gdb) next
+309         while (item != NULL)
+(gdb) print item
+$11 = (cJSON *) 0x55555555f8e0
+(gdb) print *item
+$12 = {next = 0x0, prev = 0x55555555f800, child = 0x55555555f930, type = 64, valuestring = 0x0, valueint = 0, 
+  valuedouble = 0, string = 0x0}
+(gdb) next
+311             next = item->next;// 先保存下一个节点
+(gdb) next
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+(gdb) next
+315                 cJSON_Delete(item->child);
+(gdb) step
+
+Breakpoint 1, cJSON_Delete (item=0x5555555551e0 <_start>) at cJSON.c:307
+307     {
+(gdb) bt
+#0  cJSON_Delete (item=0x5555555551e0 <_start>) at cJSON.c:307
+#1  0x00005555555556cd in cJSON_Delete (item=0x55555555f8e0) at cJSON.c:315
+#2  0x00005555555556cd in cJSON_Delete (item=0x55555555f790) at cJSON.c:315
+#3  0x00005555555556cd in cJSON_Delete (item=0x55555555f6b0) at cJSON.c:315
+#4  0x000055555555535e in main () at main.c:94
+(gdb) next
+308         cJSON *next = NULL;
+(gdb) next
+309         while (item != NULL)
+(gdb) print *item
+$13 = {next = 0x0, prev = 0x55555555f930, child = 0x0, type = 16, valuestring = 0x55555555f9a0 "value2", 
+  valueint = 0, valuedouble = 0, string = 0x55555555f980 "key"}
+(gdb) n
+311             next = item->next;// 先保存下一个节点
+(gdb) n
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+(gdb) n
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) n
+321                 global_hooks.deallocate(item->valuestring);
+(gdb) n
+322                 item->valuestring = NULL;
+(gdb) n
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) n
+326                 global_hooks.deallocate(item->string);
+(gdb) n
+327                 item->string = NULL;
+(gdb) n
+329             global_hooks.deallocate(item);
+(gdb) fin
+Run till exit from #0  cJSON_Delete (item=0x55555555f930) at cJSON.c:329
+cJSON_Delete (item=0x55555555f8e0) at cJSON.c:319
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) n
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) n
+329             global_hooks.deallocate(item);
+(gdb) n
+330             item = next;// 移动到下一个节点
+(gdb) n
+309         while (item != NULL)
+(gdb) print item
+$14 = (cJSON *) 0x0
+(gdb) print *item
+Cannot access memory at address 0x0
+(gdb) fin
+Run till exit from #0  cJSON_Delete (item=0x0) at cJSON.c:309
+cJSON_Delete (item=0x55555555f790) at cJSON.c:319
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) bt
+#0  cJSON_Delete (item=0x55555555f790) at cJSON.c:319
+#1  0x00005555555556cd in cJSON_Delete (item=0x55555555f6b0) at cJSON.c:315
+#2  0x000055555555535e in main () at main.c:94
+(gdb) n
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) n
+326                 global_hooks.deallocate(item->string);
+(gdb) n
+327                 item->string = NULL;
+(gdb) print item
+$15 = (cJSON *) 0x55555555f790
+(gdb) print *item
+$16 = {next = 0x55555555f9c0, prev = 0x55555555f700, child = 0x55555555f800, type = 32, valuestring = 0x0, 
+  valueint = 0, valuedouble = 0, string = 0x55555555f7e0 "\200\371UUUU"}
+(gdb) n
+329             global_hooks.deallocate(item);
+(gdb) n
+330             item = next;// 移动到下一个节点
+(gdb) print item
+$17 = (cJSON *) 0x55555555f790
+(gdb) n
+309         while (item != NULL)
+(gdb) print item
+$18 = (cJSON *) 0x55555555f9c0
+(gdb) n
+311             next = item->next;// 先保存下一个节点
+(gdb) print *item
+$19 = {next = 0x0, prev = 0x55555555f790, child = 0x55555555fa30, type = 64, valuestring = 0x0, valueint = 0, 
+  valuedouble = 0, string = 0x55555555fa10 "nested"}
+(gdb) n
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+(gdb) n
+315                 cJSON_Delete(item->child);
+(gdb) step
+
+Breakpoint 1, cJSON_Delete (item=0x5555555551e0 <_start>) at cJSON.c:307
+307     {
+(gdb) bt
+#0  cJSON_Delete (item=0x5555555551e0 <_start>) at cJSON.c:307
+#1  0x00005555555556cd in cJSON_Delete (item=0x55555555f9c0) at cJSON.c:315
+#2  0x00005555555556cd in cJSON_Delete (item=0x55555555f6b0) at cJSON.c:315
+#3  0x000055555555535e in main () at main.c:94
+(gdb) n
+308         cJSON *next = NULL;
+(gdb) n
+309         while (item != NULL)
+(gdb) print *item
+$20 = {next = 0x0, prev = 0x55555555fa30, child = 0x0, type = 16, valuestring = 0x55555555faa0 "data", valueint = 0, 
+  valuedouble = 0, string = 0x55555555fa80 "inner"}
+(gdb) n
+311             next = item->next;// 先保存下一个节点
+(gdb) n
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+(gdb) n
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) n
+321                 global_hooks.deallocate(item->valuestring);
+(gdb) n
+322                 item->valuestring = NULL;
+(gdb) n
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) fin
+Run till exit from #0  cJSON_Delete (item=0x55555555fa30) at cJSON.c:324
+cJSON_Delete (item=0x55555555f9c0) at cJSON.c:319
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) n
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) n
+326                 global_hooks.deallocate(item->string);
+(gdb) fin
+Run till exit from #0  cJSON_Delete (item=0x55555555f9c0) at cJSON.c:326
+cJSON_Delete (item=0x55555555f6b0) at cJSON.c:319
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) bt
+#0  cJSON_Delete (item=0x55555555f6b0) at cJSON.c:319
+#1  0x000055555555535e in main () at main.c:94
+(gdb) n
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) n
+329             global_hooks.deallocate(item);
+(gdb) n
+330             item = next;// 移动到下一个节点
+(gdb) print item
+$21 = (cJSON *) 0x55555555f6b0
+(gdb) n
+309         while (item != NULL)
+(gdb) print item
+$22 = (cJSON *) 0x0
+(gdb) fin
+Run till exit from #0  cJSON_Delete (item=0x0) at cJSON.c:309
+main () at main.c:95
+95          printf("删除完成！\n");
+(gdb) 

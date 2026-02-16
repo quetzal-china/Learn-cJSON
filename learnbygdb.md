@@ -369,25 +369,121 @@ gdb ./main
 #### 【执行路径记录】
 | 步骤 | 位置 | 操作 | 观察结果 |
 |------|------|------|----------|
-| 1 | - | - | - |
+| 1 | cJSON.c:307 | 进入 root | item = 0x55555555f6b0, type=64(cJSON_Object), child=0x55555555f700 |
+| 2 | cJSON.c:315 | 递归调用 cJSON_Delete(child) | 进入 items 数组 (0x55555555f800) |
+| 3 | 递归层1 | items 数组有 child | 递归到 items[0] (0x55555555f8e0, object) |
+| 4 | 递归层2 | items[0] 有 child | 递归到 {"key":"value1"} (0x55555555f850, string) |
+| 5 | 递归层3 | {"key":"value1"} | type=16, valuestring="value1", string="key", 无 child, 释放并返回 |
+| 6 | 递归层2 | items[0] 处理完 | next = 0x0, 继续处理 items[1] (0x55555555f930) |
+| 7 | 递归层3 | {"key":"value2"} | type=16, valuestring="value2", string="key", 释放并返回 |
+| 8 | 递归层2 | items[1] 处理完 | next = 0x0, items 数组遍历完 |
+| 9 | 递归层1 | items 处理完 | 移动到 name 节点 (0x55555555f790, type=32, string 乱码) |
+| 10 | 递归层1 | name 节点 | 无 valuestring, 直接释放自身 |
+| 11 | 递归层1 | name 处理完 | 移动到 nested (0x55555555f9c0, object) |
+| 12 | 递归层2 | nested 有 child | 递归到 {"inner":"data"} (0x55555555fa30) |
+| 13 | 递归层3 | {"inner":"data"} | type=16, valuestring="data", string="inner", 释放并返回 |
+| 14 | 递归层2 | nested 处理完 | 返回递归层1 |
+| 15 | 递归层1 | nested 处理完 | 移动到 next = 0x0, 返回 root |
+| 16 | root | 处理完所有 child | 释放 root 自身，退出 |
 
 #### 【变量状态追踪】
 ```c
-// 等待调试填充
+// 步骤 1: root 入口
+(gdb) print *item
+$2 = {next = 0x0, prev = 0x0, child = 0x55555555f700, type = 64, valuestring = 0x0, ...}
+// type=64 是 cJSON_Object
+
+// 步骤 3: items 数组
+(gdb) print *item
+$6 = {next = 0x55555555f8e0, prev = 0x55555555f8e0, child = 0x55555555f850, 
+      type = 64, ...}
+// 这是 items 数组节点，next 指向 items[0]
+
+// 步骤 4: items[0] object
+(gdb) print *item
+$12 = {next = 0x0, prev = 0x55555555f800, child = 0x55555555f930, 
+       type = 64, ...}
+
+// 步骤 5: {"key":"value1"} 叶子节点
+(gdb) print *item
+$7 = {next = 0x0, prev = 0x55555555f850, child = 0x0, type = 16, 
+      valuestring = 0x55555555f8c0 "value1", string = 0x55555555f8a0 "key"}
+
+// 步骤 11: nested object
+(gdb) print *item
+$19 = {next = 0x0, prev = 0x55555555f790, child = 0x55555555fa30, 
+       type = 64, valuestring = 0x0, string = 0x55555555fa10 "nested"}
+
+// 步骤 13: {"inner":"data"} 叶子节点
+(gdb) print *item
+$20 = {next = 0x0, prev = 0x55555555fa30, child = 0x0, type = 16, 
+       valuestring = 0x55555555faa0 "data", string = 0x55555555fa80 "inner"}
+
+// 调用栈变化
+// 入口: #0 cJSON_Delete(root) #1 main
+// 步骤2: #0 cJSON_Delete(items) #1 cJSON_Delete(root) #2 main
+// 步骤4: #0 cJSON_Delete(items[0]) #1 cJSON_Delete(items) #2 cJSON_Delete(root) #3 main
 ```
 
 #### 【关键发现】
-（待调试补充）
+
+**递归删除机制**：
+1. cJSON_Delete 使用 while 循环遍历链表（通过 next 指针）
+2. 当遇到有 child 的节点时，递归调用 cJSON_Delete(item->child) 删除子节点
+3. 递归是深度优先：先深入到最底层，再逐层返回处理兄弟节点
+
+**JSON 结构与 cJSON 链表对应**：
+```
+JSON 结构:
+{
+    "name": "test",
+    "items": [{"key":"value1"}, {"key":"value2"}],
+    "nested": {"inner":"data"}
+}
+
+cJSON 链表结构 (root.child):
+items -> name -> nested
+         ↓
+         items[0] -> items[1]    (items.child)
+         ↓
+         items[0].child = {"key":"value1"}  (叶子节点)
+         ↓
+         items[1].child = {"key":"value2"}  (叶子节点)
+         ↓
+         nested.child = {"inner":"data"}    (叶子节点)
+```
+
+**注意**：调试中发现 name 节点的 string 显示为乱码 `"\200\371UUUU"`，这是因为该内存已被释放，GDB 读取到的是垃圾数据。
+
+**释放顺序**：
+1. 递归深入到最深层（叶子节点）
+2. 释放叶子节点的 valuestring、string、自身
+3. 返回上层，释放该节点的子节点
+4. 依此类推，直到根节点
+
+**关键代码路径**：
+```c
+// cJSON.c:312-315
+if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+{
+    cJSON_Delete(item->child);  // 递归调用
+}
+```
 
 #### 【现场想法】
-- 待调试补充
+- 递归删除确保所有嵌套结构都被正确释放
+- next 指针用于遍历同一层的兄弟节点
+- child 指针用于进入下一层（触发递归）
+- 释放 valuestring 和 string 是因为解析时分配了内存
 
 #### 【下一步计划】
 - [ ] cJSON_InitHooks 如何工作？
 - [ ] cJSON_CreateString 流程
 
-#### 【调试截图】
-略
+#### 【终端记录】
+详见 `scripts/04.txt`
+[04.txt](./scripts/04.txt)
+
 
 ---
 
