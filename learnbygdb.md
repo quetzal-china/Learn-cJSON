@@ -92,7 +92,7 @@ gdb ./main
 ### 笔记 01 | 2026-2-15 | 追踪目标：[cJSON_CreateNull]
 
 #### 【调试目标】
-- **问题**: 我想验证 cJSON_CreateNull 如何创建 null 节点？
+ - **问题**: 我想验证 cJSON_CreateNull 如何创建 null 节点?
 - **入口点**: cJSON.c:2622
 - **预期路径**: 分配内存 -> 设置 type = cJSON_NULL -> 返回节点
 
@@ -140,14 +140,14 @@ $5 = 4
 3. 赋值后 type 从 0 变为 4（cJSON_NULL 的值）
 
 #### 【现场想法】
-- 自动清零是防御性编程，省去手动初始化，但清零逻辑在哪？
+- 自动清零是防御性编程，省去手动初始化，但清零逻辑在哪?
 - 需要单步进入 cJSON_New_Item 看看具体实现
-- cJSON_NULL=4，是 1<<2，位运算定义类型的好处是？
+- cJSON_NULL=4，是 1<<2，位运算定义类型的好处是?
 
 #### 【下一步计划】
-- [x] cJSON_New_Item 内部是如何分配和清零内存的？
-- [ ] global_hooks 是如何初始化的？
-- [ ] 如果想追踪 cJSON_CreateString，流程是否类似？
+- [x] cJSON_New_Item 内部是如何分配和清零内存的?
+- [ ] global_hooks 是如何初始化的?
+- [ ] 如果想追踪 cJSON_CreateString，流程是否类似?
 
 #### 【调试截图】
 
@@ -160,7 +160,7 @@ $5 = 4
 ### 笔记 02 | 2026-2-16 | 追踪目标：[cJSON_New_Item]
 
 #### 【调试目标】
-- **问题**: cJSON_New_Item 如何分配并清零内存？hooks 机制如何工作？
+- **问题**: cJSON_New_Item 如何分配并清零内存?hooks 机制如何工作?
 - **入口点**: cJSON.c:294
 - **预期路径**: 调用 hooks->allocate -> memset 清零 -> 返回节点
 
@@ -232,12 +232,12 @@ $11 = {next = 0x0, prev = 0x0, child = 0x0, type = 4, valuestring = 0x0,
 - 64 字节是 cJSON 结构体大小（8 个指针/整数字段）
 
 #### 【已验证的疑问】
-- [x] cJSON_New_Item 在哪清零内存？ -> cJSON.c:299，memset(node, '\0', sizeof(cJSON))
+- [x] cJSON_New_Item 在哪清零内存? -> cJSON.c:299，memset(node, '\0', sizeof(cJSON))
 
 #### 【下一步计划】
-- [ ] cJSON_InitHooks 如何工作？用户如何自定义内存分配器？
-- [ ] cJSON_Delete 如何配合 hooks 释放内存？
-- [ ] 如果分配失败（malloc 返回 NULL），后续流程如何处理？
+- [ ] cJSON_InitHooks 如何工作?用户如何自定义内存分配器?
+- [ ] cJSON_Delete 如何配合 hooks 释放内存?
+- [ ] 如果分配失败（malloc 返回 NULL），后续流程如何处理?
 
 #### 【调试截图】
 
@@ -250,7 +250,7 @@ $11 = {next = 0x0, prev = 0x0, child = 0x0, type = 4, valuestring = 0x0,
 ### 笔记 03 | 2026-2-16 | 追踪目标：[cJSON_Delete]
 
 #### 【调试目标】
-- **问题**: cJSON_Delete 如何释放内存？递归删除如何工作？hooks.deallocate 如何被调用？
+- **问题**: cJSON_Delete 如何释放内存?递归删除如何工作?hooks.deallocate 如何被调用?
 - **入口点**: cJSON.c:306
 - **预期路径**: 遍历链表 -> 递归删除 child -> 释放 valuestring/string -> 释放自身
 
@@ -334,10 +334,10 @@ main -> cJSON_Delete -> global_hooks.deallocate -> __GI___libc_free
 - 释放顺序很重要：先递归释放子节点，再释放自身
 
 #### 【已验证的疑问】
-- [x] cJSON_Delete 如何配合 hooks 释放内存？ -> cJSON.c:329，global_hooks.deallocate
+- [x] cJSON_Delete 如何配合 hooks 释放内存? -> cJSON.c:329，global_hooks.deallocate
 
 #### 【下一步计划】
-- [x] cJSON_Delete 如何配合 hooks 释放内存？ -> cJSON.c:329，global_hooks.deallocate
+- [x] cJSON_Delete 如何配合 hooks 释放内存? -> cJSON.c:329，global_hooks.deallocate
 - [ ] 深入测试：复杂节点（带 child、valuestring）的递归删除过程
 
 #### 【调试截图】
@@ -351,7 +351,7 @@ main -> cJSON_Delete -> global_hooks.deallocate -> __GI___libc_free
 ### 笔记 04 | 2026-2-16 | 追踪目标：[cJSON_Delete 递归删除]
 
 #### 【调试目标】
-- **问题**: 复杂嵌套 JSON 结构的递归删除如何工作？child 指针如何遍历？
+- **问题**: 复杂嵌套 JSON 结构的递归删除如何工作?child 指针如何遍历?
 - **入口点**: cJSON.c:306
 - **测试数据**: `{"name":"test","items":[{"key":"value1"},{"key":"value2"}],"nested":{"inner":"data"}}`
 
@@ -477,13 +477,55 @@ if (!(item->type & cJSON_IsReference) && (item->child != NULL))
 - 释放 valuestring 和 string 是因为解析时分配了内存
 
 #### 【下一步计划】
-- [ ] cJSON_InitHooks 如何工作？
+- [ ] cJSON_InitHooks 如何工作?
 - [ ] cJSON_CreateString 流程
 
 #### 【终端记录】
 详见 `scripts/04.txt`
 [04.txt](./scripts/04.txt)
 
+---
+### 笔记 05 | 2026-2-16 | 追踪目标：[cJSON_CreateString]
+
+#### 【调试目标】
+- **问题**: cJSON_CreateString 如何创建字符串节点?cJSON_strdup 做了什么?如何完成的复制?
+- **入口点**: cJSON.c:2692
+- **预期路径**: cJSON_New_Item -> 设置 type -> cJSON_strdup 复制字符串
+
+#### 【GDB 命令序列】
+```gdb
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动
+gdb ./main
+# 设置断点
+(gdb) break cJSON_CreateString
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | - | - | - |
+
+#### 【变量状态追踪】
+```c
+// 等待调试填充
+```
+
+#### 【关键发现】
+（待调试补充）
+
+#### 【现场想法】
+- 待调试补充
+
+#### 【下一步计划】
+- [ ] cJSON_InitHooks 如何工作?
+- [ ] 其他
+
+#### 【终端记录】：
+详见 `scripts/05.txt`
+[05.txt](./scripts/05.txt)
 
 ---
 
@@ -497,5 +539,5 @@ if (!(item->type & cJSON_IsReference) && (item->child != NULL))
 - [ ] cJSON_InitHooks
 
 ### 累积的疑问
-- 类型标志位的设计意图？
-- GDB 显示 hooks 地址异常的原因？
+- 类型标志位的设计意图?
+- GDB 显示 hooks 地址异常的原因?

@@ -37,7 +37,9 @@ int main(void)
     
     return 0;
 }
+#endif
 
+#if 0
 // 简单测试 cJSON_CreateNull
 #include "cJSON.h"
 #include <stdio.h>
@@ -58,6 +60,7 @@ int main(void)
 }
 #endif
 
+#if 0
 // 复杂 JSON 结构，测试递归删除
 #include "cJSON.h"
 #include <stdio.h>
@@ -94,5 +97,25 @@ int main(void)
     cJSON_Delete(root);
     printf("删除完成！\n");
     
+    return 0;
+}
+#endif
+
+// 测试 cJSON_CreateString
+#include "cJSON.h"
+#include <stdio.h>
+int main(void)
+{
+    printf("=== 测试 cJSON_CreateString ===\n");
+    
+    cJSON *str = cJSON_CreateString("hello world");
+    
+    if (str != NULL) {
+        printf("创建成功！\n");
+        printf("type: %d\n", str->type);
+        printf("valuestring: %s\n", str->valuestring);
+    }
+    
+    cJSON_Delete(str);
     return 0;
 }
