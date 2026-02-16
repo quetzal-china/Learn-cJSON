@@ -103,6 +103,7 @@
     "deque": "c",
     "list": "c",
     "vector": "c",
-    "initializer_list": "c"
+    "initializer_list": "c",
+    "cjson.h": "c"
   }
 }

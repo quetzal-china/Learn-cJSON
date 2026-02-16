@@ -165,7 +165,7 @@ $5 = 4
 - **预期路径**: 调用 hooks->allocate -> memset 清零 -> 返回节点
 
 #### 【GDB 命令序列】
-```
+```gdb
 # 编译
 gcc -g -o main main.c cJSON.c -lm
 # 启动
@@ -247,13 +247,158 @@ $11 = {next = 0x0, prev = 0x0, child = 0x0, type = 4, valuestring = 0x0,
 
 ---
 
+### 笔记 03 | 2026-2-16 | 追踪目标：[cJSON_Delete]
+
+#### 【调试目标】
+- **问题**: cJSON_Delete 如何释放内存？递归删除如何工作？hooks.deallocate 如何被调用？
+- **入口点**: cJSON.c:306
+- **预期路径**: 遍历链表 -> 递归删除 child -> 释放 valuestring/string -> 释放自身
+
+#### 【GDB 命令序列】
+```gdb
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动
+gdb ./main
+# 设置断点
+(gdb) break cJSON_Delete
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | cJSON.c:307 | 进入函数 | 停在入口，item = 0x55555555f6b0 |
+| 2 | cJSON.c:308 | 定义 next = NULL | next = 0x7fffffffd300（垃圾值，内存中原有的数据） |
+| 3 | cJSON.c:309 | while 判断 | item 非 NULL，进入循环 |
+| 4 | cJSON.c:311 | next = item->next | next = 0x0（item->next 本身就是 NULL） |
+| 5 | cJSON.c:312 | if 判断 child | step 进入，然后 next 跳过 |
+| 6 | cJSON.c:319 | if 判断 valuestring | next 跳过 |
+| 7 | cJSON.c:324 | if 判断 string | next 跳过 |
+| 8 | cJSON.c:329 | deallocate(item) | step 进入 __GI___libc_free |
+| 9 | cJSON.c:330 | item = next | item = 0x0 |
+| 10 | cJSON.c:309 | while 判断 | item = NULL，退出循环 |
+
+#### 【变量状态追踪】
+```c
+// 步骤 1: 入口参数
+(gdb) print item
+$4 = (cJSON *) 0x55555555f6b0
+(gdb) print *item
+$5 = {next = 0x0, prev = 0x0, child = 0x0, type = 4, valuestring = 0x0,
+      valueint = 0, valuedouble = 0, string = 0x0}
+
+// 步骤 2: 定义 next 后（垃圾值）
+(gdb) print next
+$1 = (cJSON *) 0x7fffffffd300
+(gdb) print *next
+$2 = {next = 0x1, prev = 0x7fffffffd7bd, child = 0x0, type = -10252, ...}
+// 观察: 刚定义的指针，值是内存中原有的垃圾数据
+
+// 步骤 4: 赋值 next = item->next 后
+(gdb) print next
+$3 = (cJSON *) 0x0
+// 观察: item->next = NULL，所以 next = 0
+
+// 步骤 8: 进入 free
+(gdb) next
+329             global_hooks.deallocate(item);
+(gdb) step
+__GI___libc_free (mem=0x55555555f6b0) at malloc.c:3087
+// 观察: 确认调用的是 free，释放堆地址 0x55555555f6b0
+
+// 步骤 10: 释放后
+(gdb) print *item
+Cannot access memory at address 0x0
+// 观察: 内存已被释放，无法访问
+```
+
+#### 【关键发现】
+
+**观察到的现象**：
+1. cJSON_Delete 使用 while 循环遍历链表，逐个释放节点
+2. 释放顺序：先保存 next -> 递归删除 child -> 释放 valuestring -> 释放 string -> 释放自身
+3. 通过 `global_hooks.deallocate` 调用 libc 的 free 函数
+4. cJSON_IsReference 标志用于判断 valuestring/child 是否需要释放（引用类型不释放）
+5. cJSON_StringIsConst 标志用于判断 string 是否需要释放（常量不释放）
+6. 本例中 item 是简单节点（type=4, 无 child, 无 valuestring, 无 string），只释放了自身
+
+**调用栈**：
+```
+main -> cJSON_Delete -> global_hooks.deallocate -> __GI___libc_free
+```
+
+#### 【现场想法】
+- 递归删除 child 是为了处理嵌套结构（如数组、对象）
+- 引用标志位的设计是为了避免重复释放或释放外部数据
+- 释放顺序很重要：先递归释放子节点，再释放自身
+
+#### 【已验证的疑问】
+- [x] cJSON_Delete 如何配合 hooks 释放内存？ -> cJSON.c:329，global_hooks.deallocate
+
+#### 【下一步计划】
+- [x] cJSON_Delete 如何配合 hooks 释放内存？ -> cJSON.c:329，global_hooks.deallocate
+- [ ] 深入测试：复杂节点（带 child、valuestring）的递归删除过程
+
+#### 【调试截图】
+
+![05](./pics/05.png)
+
+![06](./pics/06.png)
+
+---
+
+### 笔记 04 | 2026-2-16 | 追踪目标：[cJSON_Delete 递归删除]
+
+#### 【调试目标】
+- **问题**: 复杂嵌套 JSON 结构的递归删除如何工作？child 指针如何遍历？
+- **入口点**: cJSON.c:306
+- **测试数据**: `{"name":"test","items":[{"key":"value1"},{"key":"value2"}],"nested":{"inner":"data"}}`
+
+#### 【GDB 命令序列】
+```gdb
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动
+gdb ./main
+# 设置断点
+(gdb) break cJSON_Delete
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | - | - | - |
+
+#### 【变量状态追踪】
+```c
+// 等待调试填充
+```
+
+#### 【关键发现】
+（待调试补充）
+
+#### 【现场想法】
+- 待调试补充
+
+#### 【下一步计划】
+- [ ] cJSON_InitHooks 如何工作？
+- [ ] cJSON_CreateString 流程
+
+#### 【调试截图】
+略
+
+---
+
 ## 阶段性总结（可选）
 
 ### 已调试的函数
 - [x] cJSON_CreateNull (2026-02-15)
 - [x] cJSON_New_Item (2026-02-16)
+- [x] cJSON_Delete (2026-02-16)
 - [ ] cJSON_CreateString
-- [ ] cJSON_Delete
+- [ ] cJSON_InitHooks
 
 ### 累积的疑问
 - 类型标志位的设计意图？

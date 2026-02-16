@@ -1,4 +1,5 @@
 #if 0
+// 之前的简单测试代码
 #include "cJSON.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,7 +27,6 @@ int main(void)
     
     printf("Courses: ");
     cJSON *course = NULL;
-    /* 遍历课程数组 */
     cJSON_ArrayForEach(course, courses)
     {
         printf("%s ", cJSON_GetStringValue(course));
@@ -37,15 +37,15 @@ int main(void)
     
     return 0;
 }
-#endif
 
+// 简单测试 cJSON_CreateNull
 #include "cJSON.h"
 #include <stdio.h>
 int main(void)
 {
     printf("=== 测试 cJSON_CreateNull ===\n");
     
-    cJSON *null_item = cJSON_CreateNull();  // ← 我们要追踪这里
+    cJSON *null_item = cJSON_CreateNull();
     
     if (null_item != NULL) {
         printf("创建成功！\n");
@@ -54,5 +54,45 @@ int main(void)
     }
     
     cJSON_Delete(null_item);
+    return 0;
+}
+#endif
+
+// 复杂 JSON 结构，测试递归删除
+#include "cJSON.h"
+#include <stdio.h>
+int main(void)
+{
+    // 复杂嵌套结构：
+    // {
+    //     "name": "test",
+    //     "items": [
+    //         {"key": "value1"},
+    //         {"key": "value2"}
+    //     ],
+    //     "nested": {
+    //         "inner": "data"
+    //     }
+    // }
+    
+    const char *json_string = "{\"name\":\"test\",\"items\":[{\"key\":\"value1\"},{\"key\":\"value2\"}],\"nested\":{\"inner\":\"data\"}}";
+    
+    printf("=== 测试递归删除 ===\n");
+    printf("JSON: %s\n\n", json_string);
+    
+    cJSON *root = cJSON_Parse(json_string);
+    if (root == NULL)
+    {
+        printf("解析失败！\n");
+        return 1;
+    }
+    
+    printf("解析成功！\n");
+    printf("根节点地址: %p\n", (void*)root);
+    
+    // 在这里设置断点调试 cJSON_Delete
+    cJSON_Delete(root);
+    printf("删除完成！\n");
+    
     return 0;
 }
