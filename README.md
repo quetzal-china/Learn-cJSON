@@ -198,3 +198,6 @@ Courses: math english
 - 完成日期：2026-02-14
 
 > 本项目所有代码和笔记均为学习研究用途，遵循 cJSON 的 MIT 开源协议。
+
+❓ Have a technical question? [Ask in Issues](https://github.com/quetzal-china/Learn-cJSON/issues/new?title=%5BQ%5D+)
+❓ 遇到技术问题？[欢迎在 Issues 中提问](https://github.com/quetzal-china/Learn-cJSON/issues/new?title=%5BQ%5D+)
