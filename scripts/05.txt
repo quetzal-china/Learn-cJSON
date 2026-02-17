@@ -1,0 +1,138 @@
+ros:foxy(1) noetic(2) ?
+1
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb) break cJSON_CreateString
+Breakpoint 1 at 0x5543: file cJSON.c, line 2693.
+(gdb) break cJSON_New_Item
+Breakpoint 2 at 0x160f: file cJSON.c, line 295.
+(gdb) break cJSON_strdup
+Breakpoint 3 at 0x14b5: file cJSON.c, line 232.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+=== 测试 cJSON_CreateString ===
+
+Breakpoint 1, cJSON_CreateString (string=0x7fffffffd210 "") at cJSON.c:2693
+2693    {
+(gdb) ls
+Undefined command: "ls".  Try "help".
+(gdb) list
+2688
+2689        return item;
+2690    }
+2691
+2692    CJSON_PUBLIC(cJSON *) cJSON_CreateString(const char *string)
+2693    {
+2694        cJSON *item = cJSON_New_Item(&global_hooks);
+2695        if(item)
+2696        {
+2697            item->type = cJSON_String;
+(gdb) step
+2694        cJSON *item = cJSON_New_Item(&global_hooks);
+(gdb) step
+
+Breakpoint 2, cJSON_New_Item (hooks=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:295
+295     {
+(gdb) next
+296         cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));
+(gdb) next
+297         if (node)
+(gdb) print *node
+$1 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) next
+299             memset(node, '\0', sizeof(cJSON));
+(gdb) next
+302         return node;
+(gdb) print *node
+$2 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) print node
+$3 = (cJSON *) 0x55555555f6b0
+(gdb) fin
+Run till exit from #0  cJSON_New_Item (hooks=0x55555555e010 <global_hooks>) at cJSON.c:302
+0x000055555555955f in cJSON_CreateString (string=0x55555555b02a "hello world") at cJSON.c:2694
+2694        cJSON *item = cJSON_New_Item(&global_hooks);
+Value returned is $4 = (cJSON *) 0x55555555f6b0
+(gdb) next
+2695        if(item)
+(gdb) print *item
+$5 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) print item
+$6 = (cJSON *) 0x55555555f6b0
+(gdb) next
+2697            item->type = cJSON_String;
+(gdb) print *item
+$7 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) next
+2698            item->valuestring = (char*)cJSON_strdup((const unsigned char*)string, &global_hooks);
+(gdb) print *item
+$8 = {next = 0x0, prev = 0x0, child = 0x0, type = 16, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) step
+
+Breakpoint 3, cJSON_strdup (string=0x55555555e010 <global_hooks> "\340\020\343\367\377\177", hooks=0x0)
+    at cJSON.c:232
+232     {
+(gdb) next
+233         size_t length = 0;
+(gdb) next
+234         unsigned char *copy = NULL;
+(gdb) next
+236         if (string == NULL)
+(gdb) n
+241         length = strlen((const char*)string) + sizeof("");
+(gdb) n
+242         copy = (unsigned char*)hooks->allocate(length);
+(gdb) n
+243         if (copy == NULL)
+(gdb) n
+247         memcpy(copy, string, length);
+(gdb) n
+249         return copy;
+(gdb) print copy
+$9 = (unsigned char *) 0x55555555f700 "hello world"
+(gdb) n
+250     }
+(gdb) n
+cJSON_CreateString (string=0x55555555b02a "hello world") at cJSON.c:2698
+2698            item->valuestring = (char*)cJSON_strdup((const unsigned char*)string, &global_hooks);
+(gdb) next
+2699            if(!item->valuestring)
+(gdb) print *item
+$10 = {next = 0x0, prev = 0x0, child = 0x0, type = 16, valuestring = 0x55555555f700 "hello world", valueint = 0, 
+  valuedouble = 0, string = 0x0}
+(gdb) print item->valuestring
+$11 = 0x55555555f700 "hello world"
+(gdb) n
+2706        return item;
+(gdb) n
+2707    }
+(gdb) n
+main () at main.c:113
+113         if (str != NULL) {
+(gdb) print *item
+No symbol "item" in current context.
+(gdb) bt
+#0  main () at main.c:113
+(gdb) continue
+Continuing.
+创建成功！
+type: 16
+valuestring: hello world
+[Inferior 1 (process 297910) exited normally]
+(gdb) q
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ 

@@ -493,37 +493,108 @@ if (!(item->type & cJSON_IsReference) && (item->child != NULL))
 - **预期路径**: cJSON_New_Item -> 设置 type -> cJSON_strdup 复制字符串
 
 #### 【GDB 命令序列】
-```gdb
+```bash
 # 编译
 gcc -g -o main main.c cJSON.c -lm
 # 启动
 gdb ./main
-# 设置断点
+# 设置的断点
 (gdb) break cJSON_CreateString
+(gdb) break cJSON_New_Item
+(gdb) break cJSON_strdup
 (gdb) run
 ```
 
 #### 【执行路径记录】
 | 步骤 | 位置 | 操作 | 观察结果 |
 |------|------|------|----------|
-| 1 | - | - | - |
+| 1 | cJSON.c:2694 | 调用 cJSON_New_Item | 进入 cJSON_New_Item |
+| 2 | cJSON.c:296 | 分配内存 | malloc(64) 返回 0x55555555f6b0 |
+| 3 | cJSON.c:299 | memset 清零 | 所有字段从垃圾值变为 0 |
+| 4 | cJSON.c:302 | return node | 返回节点地址 0x55555555f6b0 |
+| 5 | cJSON.c:2697 | 赋值 type | type 从 0 变为 16 (cJSON_String) |
+| 6 | cJSON.c:2698 | 调用 cJSON_strdup | 进入 cJSON_strdup |
+| 7 | cJSON.c:241 | 计算长度 | length = strlen("hello world") + 1 = 12 |
+| 8 | cJSON.c:242 | 分配字符串内存 | hooks->allocate(12) 返回 0x55555555f700 |
+| 9 | cJSON.c:247 | 复制字符串 | memcpy(copy, string, 12) |
+| 10 | cJSON.c:249 | return copy | 返回复制的字符串地址 |
+| 11 | cJSON.c:2698 | 赋值 valuestring | valuestring = 0x55555555f700 |
+| 12 | cJSON.c:2706 | return item | 返回创建的节点 |
 
 #### 【变量状态追踪】
 ```c
-// 等待调试填充
+// 步骤 4: cJSON_New_Item 返回后
+(gdb) print item
+$6 = (cJSON *) 0x55555555f6b0
+(gdb) print *item
+$5 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, ...}
+
+// 步骤 5: type 赋值后
+(gdb) print *item
+$8 = {next = 0x0, prev = 0x0, child = 0x0, type = 16, valuestring = 0x0, ...}
+// 观察: type = 16 (cJSON_String), valuestring 还是 NULL
+
+// 步骤 9: cJSON_strdup 返回后
+(gdb) print copy
+$9 = (unsigned char *) 0x55555555f700 "hello world"
+
+// 步骤 11: valuestring 赋值后
+(gdb) print *item
+$10 = {next = 0x0, prev = 0x0, child = 0x0, type = 16, 
+       valuestring = 0x55555555f700 "hello world", valueint = 0, ...}
+// 观察: 字符串已复制到新内存，节点持有所有权
+
+// 最终输出
+创建成功!
+type: 16
+valuestring: hello world
 ```
 
 #### 【关键发现】
-（待调试补充）
+
+**cJSON_CreateString 执行流程**:
+1. 调用 cJSON_New_Item 分配 cJSON 节点结构（64 字节）
+2. 设置 type = cJSON_String (16)
+3. 调用 cJSON_strdup 复制字符串内容到新内存
+4. 将复制的字符串地址赋值给 valuestring
+
+**cJSON_strdup 实现机制** (cJSON.c:232-250):
+1. 计算字符串长度: strlen(string) + 1（包含结尾 \0）
+2. 调用 hooks->allocate 分配内存
+3. 使用 memcpy 复制字符串内容
+4. 返回新分配的字符串地址
+
+**内存布局**:
+```
+栈区:                     堆区:
++---------------+         +-------------------+
+| "hello world" |         | cJSON 节点 (64B)  |
+| (输入参数)     |         | type = 16         |
++---------------+         | valuestring --+---+
+                          +---------------|---+
+                                          |
+                                          v
+                                   +-------------------+
+                                   | "hello world"     |
+                                   | (复制的新内存)      |
+                                   +-------------------+
+```
+
+**关于 malloc 返回已清零内存的疑问**:
+- 观察到 malloc 返回后内存已经被清零（所有字段为 0）
+- 这是 glibc malloc 的行为（内存分配器优化）
+- cJSON 仍然调用 memset 清零，是防御性编程确保跨平台一致性
 
 #### 【现场想法】
-- 待调试补充
+- 字符串节点需要独立分配内存存储字符串内容，与节点结构分离
+- cJSON_strdup 实现了类似标准库 strdup 的功能，但使用自定义的内存分配器
+- 创建的节点拥有字符串内容的所有权，删除时需要释放两段内存
 
 #### 【下一步计划】
 - [ ] cJSON_InitHooks 如何工作?
-- [ ] 其他
+- [ ] 对比 cJSON_CreateString vs cJSON_CreateStringReference 的区别?
 
-#### 【终端记录】：
+#### 【终端记录】
 详见 `scripts/05.txt`
 [05.txt](./scripts/05.txt)
 
@@ -535,7 +606,7 @@ gdb ./main
 - [x] cJSON_CreateNull (2026-02-15)
 - [x] cJSON_New_Item (2026-02-16)
 - [x] cJSON_Delete (2026-02-16)
-- [ ] cJSON_CreateString
+- [x] cJSON_CreateString (2026-02-16)
 - [ ] cJSON_InitHooks
 
 ### 累积的疑问
