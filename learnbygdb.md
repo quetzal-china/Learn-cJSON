@@ -622,22 +622,92 @@ gdb ./main
 #### 【执行路径记录】
 | 步骤 | 位置 | 操作 | 观察结果 |
 |------|------|------|----------|
-| 1 | - | - | - |
+| 1 | cJSON.c:2711 | 调用 cJSON_New_Item | 分配 64 字节节点 |
+| 2 | cJSON.c:296 | 分配内存 | malloc(64) 返回 0x55555555f6b0 |
+| 3 | cJSON.c:302 | return node | 返回节点地址 |
+| 4 | cJSON.c:2714 | type = cJSON_String \| cJSON_IsReference | type = 272 (16+256) |
+| 5 | cJSON.c:2715 | valuestring = cast_away_const(string) | 直接指向外部字符串 |
+| 6 | cJSON.c:2718 | return item | 返回节点 |
 
 #### 【变量状态追踪】
 ```c
-// 等待调试填充
+// 步骤 3: cJSON_New_Item 返回后
+(gdb) print *item
+$3 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, ...}
+
+// 步骤 4: type 赋值后
+(gdb) print item->type
+$4 = 272
+
+// 步骤 5: valuestring 赋值后
+(gdb) print *item
+$5 = {next = 0x0, prev = 0x0, child = 0x0, type = 272, 
+       valuestring = 0x55555555b033 "hello world", ...}
+// 观察: valuestring 直接指向外部字符串地址
+
+// 最终输出
+创建成功!
+type: 272
+valuestring: hello world
 ```
 
 #### 【关键发现】
-（待调试补充）
+
+**cJSON_CreateStringReference 实现机制**:
+1. 分配 cJSON 节点结构（64 字节）
+2. 设置 type = cJSON_String | cJSON_IsReference (272)
+3. 使用 cast_away_const 将 const char* 转为 char*，直接指向外部字符串
+4. 不分配新内存存储字符串内容
+
+**cast_away_const 函数** (cJSON.c:2234):
+```c
+static void* cast_away_const(const void* string)
+{
+    return (void*)string;
+}
+```
+- 作用: 去除 const 限定符，使 valuestring 可以指向 const 字符串
+- 这是已知安全的类型转换，因为 cJSON 不会修改 valuestring
+
+**内存布局对比**:
+```
+cJSON_CreateString (复制):
+栈区: "hello world"          堆区: [节点] -> [字符串副本]
+                                      valuestring 指向堆区
+
+cJSON_CreateStringReference (引用):
+栈区: "hello world" --------> 堆区: [节点]
+        ↑                      valuestring 指向栈区
+    外部字符串地址
+```
+
+**两种创建方式对比**:
+| 特性 | cJSON_CreateString | cJSON_CreateStringReference |
+|------|-------------------|---------------------------|
+| 内存分配次数 | 2次 (节点+字符串) | 1次 (仅节点) |
+| type 值 | 16 | 272 (16+256) |
+| valuestring 指向 | 堆区新分配内存 | 外部字符串地址 |
+| 内存所有权 | 节点拥有 | 不拥有，依赖外部生命周期 |
+| 删除时释放字符串? | 是 | 否 |
+
+**使用场景**:
+- cJSON_CreateString: 普通字符串，cJSON 负责管理内存
+- cJSON_CreateStringReference: 常量字符串，避免复制开销，但需外部保证生命周期
 
 #### 【现场想法】
-- 待调试补充
+- cJSON_IsReference 标志位通过位运算与 cJSON_String 组合，实现运行时区分
+- 引用机制是典型的空间换时间优化，减少内存分配和复制开销
+- 使用时需注意: 外部字符串必须比节点存活更久
 
 #### 【下一步计划】
-- [ ] 对比 cJSON_CreateString vs cJSON_CreateStringReference 的区别?
-- [ ] cJSON_Delete 如何处理引用节点?
+- [x] 对比 cJSON_CreateString vs cJSON_CreateStringReference 的区别?
+- [ ] cJSON_Delete 如何处理引用节点?（验证不释放 valuestring）
+
+#### 【调试截图】
+
+![07](./pics/07.png)
+
+![08](./pics/08.png)
 
 #### 【终端记录】
 详见 `scripts/06.txt`
@@ -652,7 +722,7 @@ gdb ./main
 - [x] cJSON_New_Item (2026-02-16)
 - [x] cJSON_Delete (2026-02-16)
 - [x] cJSON_CreateString (2026-02-16)
-- [ ] cJSON_CreateStringReference
+- [x] cJSON_CreateStringReference (2026-02-17)
 - [ ] cJSON_InitHooks
 
 ### 累积的疑问

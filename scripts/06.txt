@@ -1,0 +1,90 @@
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb) break cJSON_CreateStringReference
+Breakpoint 1 at 0x55c1: file cJSON.c, line 2710.
+(gdb) break cJSON_New_Item
+Breakpoint 2 at 0x161a: file cJSON.c, line 295.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+=== 测试 cJSON_CreateStringReference ===
+
+Breakpoint 1, cJSON_CreateStringReference (string=0x7fffffffd210 "") at cJSON.c:2710
+2710    {
+(gdb) list
+2705
+2706        return item;
+2707    }
+2708
+2709    CJSON_PUBLIC(cJSON *) cJSON_CreateStringReference(const char *string)
+2710    {
+2711        cJSON *item = cJSON_New_Item(&global_hooks);
+2712        if (item != NULL)
+2713        {
+2714            item->type = cJSON_String | cJSON_IsReference;
+(gdb) step
+2711        cJSON *item = cJSON_New_Item(&global_hooks);
+(gdb) step
+
+Breakpoint 2, cJSON_New_Item (hooks=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:295
+295     {
+(gdb) n
+296         cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));
+(gdb) n
+297         if (node)
+(gdb) print *node
+$1 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) n
+299             memset(node, '\0', sizeof(cJSON));
+(gdb) n
+302         return node;
+(gdb) n
+303     }
+(gdb) fin
+Run till exit from #0  cJSON_New_Item (hooks=0x55555555e010 <global_hooks>) at cJSON.c:303
+0x00005555555595dd in cJSON_CreateStringReference (string=0x55555555b033 "hello world") at cJSON.c:2711
+2711        cJSON *item = cJSON_New_Item(&global_hooks);
+Value returned is $2 = (cJSON *) 0x55555555f6b0
+(gdb) n
+2712        if (item != NULL)
+(gdb) print *item
+$3 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) n
+2714            item->type = cJSON_String | cJSON_IsReference;
+(gdb) n
+2715            item->valuestring = (char*)cast_away_const(string);
+(gdb) print item->type
+$4 = 272
+(gdb) n
+2718        return item;
+(gdb) print *item
+$5 = {next = 0x0, prev = 0x0, child = 0x0, type = 272, valuestring = 0x55555555b033 "hello world", valueint = 0, 
+  valuedouble = 0, string = 0x0}
+(gdb) n
+2719    }
+(gdb) n
+main () at main.c:135
+135         if (str_ref != NULL) {
+(gdb) continue
+Continuing.
+创建成功!
+type: 272
+valuestring: hello world
+[Inferior 1 (process 369944) exited normally]
+(gdb) q
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ 
