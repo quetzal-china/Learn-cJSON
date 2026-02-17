@@ -101,6 +101,7 @@ int main(void)
 }
 #endif
 
+#if 0
 // 测试 cJSON_CreateString
 #include "cJSON.h"
 #include <stdio.h>
@@ -117,5 +118,26 @@ int main(void)
     }
     
     cJSON_Delete(str);
+    return 0;
+}
+#endif
+
+// 测试 cJSON_CreateStringReference
+#include "cJSON.h"
+#include <stdio.h>
+int main(void)
+{
+    printf("=== 测试 cJSON_CreateStringReference ===\n");
+    
+    const char *external_string = "hello world";
+    cJSON *str_ref = cJSON_CreateStringReference(external_string);
+    
+    if (str_ref != NULL) {
+        printf("创建成功!\n");
+        printf("type: %d\n", str_ref->type);
+        printf("valuestring: %s\n", str_ref->valuestring);
+    }
+    
+    cJSON_Delete(str_ref);
     return 0;
 }

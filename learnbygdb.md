@@ -600,6 +600,51 @@ valuestring: hello world
 
 ---
 
+### 笔记 06 | 2026-2-17 | 追踪目标：[cJSON_CreateStringReference]
+
+#### 【调试目标】
+- **问题**: 引用节点与复制节点的区别是什么?cJSON_IsReference 标志如何工作?
+- **入口点**: cJSON.c:2709
+- **预期路径**: cJSON_New_Item -> 设置 type(含 IsReference) -> 直接引用字符串
+
+#### 【GDB 命令序列】
+```bash
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动
+gdb ./main
+# 设置断点
+(gdb) break cJSON_CreateStringReference
+(gdb) break cJSON_New_Item
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | - | - | - |
+
+#### 【变量状态追踪】
+```c
+// 等待调试填充
+```
+
+#### 【关键发现】
+（待调试补充）
+
+#### 【现场想法】
+- 待调试补充
+
+#### 【下一步计划】
+- [ ] 对比 cJSON_CreateString vs cJSON_CreateStringReference 的区别?
+- [ ] cJSON_Delete 如何处理引用节点?
+
+#### 【终端记录】
+详见 `scripts/06.txt`
+[06.txt](./scripts/06.txt)
+
+---
+
 ## 阶段性总结（可选）
 
 ### 已调试的函数
@@ -607,6 +652,7 @@ valuestring: hello world
 - [x] cJSON_New_Item (2026-02-16)
 - [x] cJSON_Delete (2026-02-16)
 - [x] cJSON_CreateString (2026-02-16)
+- [ ] cJSON_CreateStringReference
 - [ ] cJSON_InitHooks
 
 ### 累积的疑问
