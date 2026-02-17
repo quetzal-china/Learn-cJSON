@@ -715,6 +715,49 @@ cJSON_CreateStringReference (引用):
 
 ---
 
+### 笔记 07 | 2026-2-17 | 追踪目标：[cJSON_Delete 处理引用节点]
+
+#### 【调试目标】
+- **问题**: cJSON_Delete 如何处理引用节点?是否会释放 valuestring?
+- **入口点**: cJSON.c:306
+- **测试数据**: 使用 cJSON_CreateStringReference 创建的引用节点
+
+#### 【GDB 命令序列】
+```bash
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动
+gdb ./main
+# 设置断点
+(gdb) break cJSON_Delete
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | - | - | - |
+
+#### 【变量状态追踪】
+```c
+// 等待调试填充
+```
+
+#### 【关键发现】
+（待调试补充）
+
+#### 【现场想法】
+- 待调试补充
+
+#### 【下一步计划】
+- [ ] 验证 cJSON_Delete 不释放引用节点的 valuestring
+
+#### 【终端记录】
+详见 `scripts/07.txt`
+[07.txt](./scripts/07.txt)
+
+---
+
 ## 阶段性总结（可选）
 
 ### 已调试的函数
