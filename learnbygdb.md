@@ -718,9 +718,9 @@ cJSON_CreateStringReference (引用):
 ### 笔记 07 | 2026-2-17 | 追踪目标：[cJSON_Delete 处理引用节点]
 
 #### 【调试目标】
-- **问题**: cJSON_Delete 如何处理引用节点?是否会释放 valuestring?
+- **问题**: cJSON_Delete 如何处理引用节点?是否会释放 valuestring?cJSON_IsReference 标志如何工作?
 - **入口点**: cJSON.c:306
-- **测试数据**: 使用 cJSON_CreateStringReference 创建的引用节点
+- **测试数据**: 使用 cJSON_CreateStringReference 创建的引用节点 (type=272)
 
 #### 【GDB 命令序列】
 ```bash
@@ -736,21 +736,105 @@ gdb ./main
 #### 【执行路径记录】
 | 步骤 | 位置 | 操作 | 观察结果 |
 |------|------|------|----------|
-| 1 | - | - | - |
+| 1 | cJSON.c:307 | 进入函数 | item = 0x7fffffffd210 (初始显示为垃圾值) |
+| 2 | cJSON.c:308 | 定义 next = NULL | next = 0x0 |
+| 3 | cJSON.c:309 | while 判断 | item 非 NULL，进入循环 |
+| 4 | cJSON.c:311 | next = item->next | next = 0x0 |
+| 5 | cJSON.c:312 | if 判断 child | !(272 & 256) = 0，条件为 false，跳过递归删除 |
+| 6 | cJSON.c:319 | if 判断 valuestring | !(272 & 256) = 0，条件为 false，**跳过释放 valuestring** |
+| 7 | cJSON.c:324 | if 判断 string | !(0 & 32) = 1，但 string = NULL，跳过 |
+| 8 | cJSON.c:329 | deallocate(item) | 只释放节点自身，不释放 valuestring |
+| 9 | cJSON.c:330 | item = next | item = 0x0 |
+| 10 | cJSON.c:309 | while 判断 | item = NULL，退出循环 |
 
 #### 【变量状态追踪】
 ```c
-// 等待调试填充
+// 步骤 1: 入口参数（初始显示异常）
+(gdb) p item
+$1 = (cJSON *) 0x7fffffffd210
+
+// 步骤 3: 执行一步后，显示正确
+(gdb) print *item
+$5 = {next = 0x0, prev = 0x0, child = 0x0, type = 272, valuestring = 0x55555555b037 "hello world", valueint = 0, 
+  valuedouble = 0, string = 0x0}
+// 观察: type = 272, valuestring 指向栈区外部字符串
+
+// 步骤 5: 检查 cJSON_IsReference 标志
+(gdb) p item->type & 256
+$7 = 256
+(gdb) p !(item->type & cJSON_IsReference)
+$8 = 0
+// 观察: type & cJSON_IsReference = 256，非零为 true，取反为 false
+
+// 步骤 8: 进入 free
+(gdb) step
+__GI___libc_free (mem=0x55555555f6b0) at malloc.c:3087
+// 观察: 只释放节点自身 (0x55555555f6b0)，valuestring 指向的栈区地址未被释放
 ```
 
 #### 【关键发现】
-（待调试补充）
+
+**cJSON_Delete 处理引用节点的机制**:
+1. 通过 `type & cJSON_IsReference` 判断是否为引用节点
+2. 当检测到 cJSON_IsReference 标志时，跳过以下操作:
+   - 递归删除 child (第312行)
+   - 释放 valuestring (第319行)
+3. 只释放节点结构自身，不释放 valuestring 指向的外部内存
+
+**执行流程图**:
+```
+cJSON_Delete(引用节点):
+    while (item != NULL):
+        next = item->next
+        
+        // 关键判断: cJSON_IsReference
+        if (!(type & cJSON_IsReference) && child != NULL):
+            cJSON_Delete(child)    // 引用节点跳过
+        
+        if (!(type & cJSON_IsReference) && valuestring != NULL):
+            deallocate(valuestring) // 引用节点跳过!!!!!
+        
+        if (!(type & cJSON_StringIsConst) && string != NULL):
+            deallocate(string)
+        
+        deallocate(item)  // 只释放节点自身
+        item = next
+```
+
+**内存布局验证**:
+```
+栈区:                      堆区:
++-------------------+      +-------------------+
+| "hello world"     |      | cJSON 节点 (64B)  |
+| (外部字符串)       |      | type = 272        |
++-------------------+      | valuestring ------+---> 指向栈区
+        ↑                  +-------------------+
+        |                          
+        +---------------------- 不释放，依赖外部生命周期
+```
+
+**输出结果**:
+```
+=== 测试 cJSON_Delete 处理引用节点 ===
+创建成功! type=272, valuestring=hello world
+准备删除...
+删除完成!
+```
 
 #### 【现场想法】
-- 待调试补充
+- cJSON_IsReference 设计目的: 避免释放外部管理的内存，防止悬空指针
+- 引用节点适用场景: 常量字符串、栈区字符串、已由外部管理的内存
+- 释放 valuestring 的条件: 必须同时满足两个条件:
+  1. !(type & cJSON_IsReference) - 不是引用节点
+  2. valuestring != NULL - 确实分配了内存
+
+#### 【已验证的疑问】
+- [x] cJSON_Delete 不释放引用节点的 valuestring? -> 验证成功，第319行跳过
 
 #### 【下一步计划】
-- [ ] 验证 cJSON_Delete 不释放引用节点的 valuestring
+- [x] cJSON_Delete 处理引用节点 -> 验证完成
+- [ ] cJSON_InitHooks 如何工作?
+- [ ] cJSON_Parse 解析流程
 
 #### 【终端记录】
 详见 `scripts/07.txt`

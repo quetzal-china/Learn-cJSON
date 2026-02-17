@@ -1,0 +1,90 @@
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb) break cJSON_Delete
+Breakpoint 1 at 0x1650: file cJSON.c, line 307.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+=== 测试 cJSON_Delete 处理引用节点 ===
+创建成功! type=272, valuestring=hello world
+准备删除...
+
+Breakpoint 1, cJSON_Delete (item=0x7fffffffd210) at cJSON.c:307
+307     {
+(gdb) p item
+$1 = (cJSON *) 0x7fffffffd210
+(gdb) p *item
+$2 = {next = 0x0, prev = 0x7ffff7dbb083 <__libc_start_main+243>, child = 0x7ffff7ffc620 <_rtld_global_ro>, 
+  type = -11512, valuestring = 0x100000000 <error: Cannot access memory at address 0x100000000>, 
+  valueint = 1431655113, valuedouble = 4.6355705395856436e-310, 
+  string = 0xb0585afb60b2bca5 <error: Cannot access memory at address 0xb0585afb60b2bca5>}
+(gdb) p item->type
+$3 = -11512
+(gdb) list
+302         return node;
+303     }
+304
+305     /* Delete a cJSON structure. */
+306     CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
+307     {
+308         cJSON *next = NULL;
+309         while (item != NULL)
+310         {
+311             next = item->next;// 先保存下一个节点
+(gdb) p /u item->type
+$4 = 4294955784
+(gdb) n
+308         cJSON *next = NULL;
+(gdb) n
+309         while (item != NULL)
+(gdb) print *item
+$5 = {next = 0x0, prev = 0x0, child = 0x0, type = 272, valuestring = 0x55555555b037 "hello world", valueint = 0, 
+  valuedouble = 0, string = 0x0}
+(gdb) n
+311             next = item->next;// 先保存下一个节点
+(gdb) print *item
+$6 = {next = 0x0, prev = 0x0, child = 0x0, type = 272, valuestring = 0x55555555b037 "hello world", valueint = 0, 
+  valuedouble = 0, string = 0x0}
+(gdb) list
+306     CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
+307     {
+308         cJSON *next = NULL;
+309         while (item != NULL)
+310         {
+311             next = item->next;// 先保存下一个节点
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+313             {
+314                 /* 递归删除 */
+315                 cJSON_Delete(item->child);
+(gdb) n
+312             if (!(item->type & cJSON_IsReference) && (item->child != NULL))
+(gdb) n
+319             if (!(item->type & cJSON_IsReference) && (item->valuestring != NULL))
+(gdb) n
+324             if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) n
+329             global_hooks.deallocate(item);
+(gdb) step
+__GI___libc_free (mem=0x55555555f6b0) at malloc.c:3087
+3087    malloc.c: 没有那个文件或目录.
+(gdb) continue
+Continuing.
+删除完成!
+[Inferior 1 (process 485788) exited normally]
+(gdb) q
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ 
