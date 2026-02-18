@@ -1210,6 +1210,63 @@ $14 = {content = 0x55555555b004 "{\"a\":1}", length = 8, offset = 5, depth = 1, 
 
 ---
 
+### 笔记 10 | 2026-02-18 | 追踪目标：[cJSON_Parse 嵌套对象]
+
+#### 【调试目标】
+- **问题**: 嵌套对象 `{"outer":{"inner":1}}` 如何解析？parse_object 会递归调用自己吗？调用栈有多深？
+- **入口点**: cJSON.c:1399 (cJSON_Parse函数)
+- **预期路径**: 
+  - 外层: cJSON_Parse → parse_value → parse_object("outer") → parse_value → parse_object("inner") → parse_number(1)
+  - 预期看到 depth 递增和两次 parse_object 调用
+
+#### 【GDB 命令序列】
+```bash
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动调试
+gdb ./main
+# 设置断点
+(gdb) break cJSON_Parse
+(gdb) break parse_object
+(gdb) break parse_value
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | | | |
+
+#### 【变量状态追踪】
+```c
+// 待填写
+```
+
+#### 【关键发现】
+
+**观察到的现象**：
+1. 
+
+**调用栈深度变化**：
+```
+待填写
+```
+
+#### 【现场想法】
+- 
+
+#### 【已验证的疑问】
+- [ ] 
+
+#### 【下一步计划】
+- [ ] 
+
+#### 【终端记录】
+详见 `scripts/10.txt`
+[10.txt](./scripts/10.txt)
+
+---
+
 ## 阶段性总结（可选）
 
 ### 已调试的函数
