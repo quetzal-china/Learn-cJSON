@@ -104,6 +104,7 @@
     "list": "c",
     "vector": "c",
     "initializer_list": "c",
-    "cjson.h": "c"
+    "cjson.h": "c",
+    "stdlib.h": "c"
   }
 }

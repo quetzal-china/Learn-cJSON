@@ -144,6 +144,7 @@ int main(void)
 }
 #endif
 
+#if 0
 // 测试 cJSON_Delete 对于stringreference的处理
 #include "cJSON.h"
 #include <stdio.h>
@@ -161,6 +162,64 @@ int main(void)
     printf("准备删除...\n");
     cJSON_Delete(str_ref);
     printf("删除完成!\n");
+    
+    return 0;
+}
+#endif
+
+#include "cJSON.h"
+#include <stdio.h>
+#include <stdlib.h>
+// 自定义分配器：带计数
+static size_t alloc_count = 0;
+static size_t free_count = 0;
+static void* my_malloc(size_t size) {
+    alloc_count++;
+    void* ptr = malloc(size);
+    printf("[自定义malloc] size=%zu, ptr=%p, 次数=%zu\n", size, ptr, alloc_count);
+    return ptr;
+}
+static void my_free(void* ptr) {
+    free_count++;
+    printf("[自定义free] ptr=%p, 次数=%zu\n", ptr, free_count);
+    free(ptr);
+}
+int main(void) {
+    printf("=== 测试 cJSON_InitHooks ===\n\n");
+    
+    // 1. 使用默认分配器
+    printf("--- 默认分配器 ---\n");
+    cJSON *item1 = cJSON_CreateString("hello");
+    printf("创建成功: valuestring=%s\n\n", item1->valuestring);
+    cJSON_Delete(item1);
+    printf("删除完成\n\n");
+    
+    // 2. 设置自定义分配器
+    printf("--- 设置自定义分配器 ---\n");
+    cJSON_Hooks hooks = { my_malloc, my_free };
+    cJSON_InitHooks(&hooks);
+    
+    printf("alloc_count=%zu, free_count=%zu\n\n", alloc_count, free_count);
+    
+    // 3. 使用自定义分配器创建节点
+    printf("--- 使用自定义分配器创建 ---\n");
+    cJSON *item2 = cJSON_CreateString("world");
+    printf("创建成功: valuestring=%s\n\n", item2->valuestring);
+    
+    // 4. 删除节点
+    printf("--- 删除节点 ---\n");
+    cJSON_Delete(item2);
+    printf("删除完成\n\n");
+    
+    printf("统计: alloc=%zu, free=%zu\n", alloc_count, free_count);
+    
+    // 5. 重置为默认
+    printf("\n--- 重置为默认分配器 ---\n");
+    cJSON_InitHooks(NULL);
+    cJSON *item3 = cJSON_CreateString("default again");
+    printf("创建成功: valuestring=%s\n", item3->valuestring);
+    cJSON_Delete(item3);
+    printf("删除完成\n");
     
     return 0;
 }
