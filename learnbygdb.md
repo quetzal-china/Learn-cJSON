@@ -984,6 +984,232 @@ cJSON_InitHooks(hooks):
 
 ---
 
+### 笔记 09 | 2026-02-18 | 追踪目标：[cJSON_Parse]
+
+#### 【调试目标】
+- **问题**: cJSON_Parse如何解析JSON字符串？从入口到parse_value的调用链是什么？
+- **入口点**: cJSON.c:1034 (cJSON_Parse函数)
+- **预期路径**: cJSON_Parse -> cJSON_ParseWithOpts -> cJSON_ParseWithLengthOpts -> parse_value -> parse_object
+
+#### 【GDB 命令序列】
+```bash
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动调试
+gdb ./main
+# 设置断点
+(gdb) break cJSON_Parse
+(gdb) break cJSON_ParseWithOpts
+# 建议设置断点 (gdb) break cJSON_ParseWithLengthOpts, 本次分析没有设置
+(gdb) break parse_value
+(gdb) break parse_object
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | cJSON.c:1399 | 进入 cJSON_Parse | 入口函数，value 指向输入字符串 `{"a":1}` |
+| 2 | cJSON.c:1400 | 调用 cJSON_ParseWithOpts | 参数 return_parse_end=0, require_null_terminated=0 |
+| 3 | cJSON.c:1303 | 计算 buffer_length | strlen(value) + sizeof("")，结果为 8 |
+| 4 | cJSON.c:1305 | 调用 cJSON_ParseWithLengthOpts | 内部调用，未停断点 |
+| 5 | cJSON.c:1540 | 进入 parse_value | 核心分派函数，检查 input_buffer |
+| 6 | cJSON.c:1548 | 检查 null | 不匹配（开头是 `{`） |
+| 7 | cJSON.c:1555 | 检查 false | 不匹配 |
+| 8 | cJSON.c:1562 | 检查 true | 不匹配 |
+| 9 | cJSON.c:1570 | 检查 string | 不匹配（开头是 `{` 而非 `"`） |
+| 10 | cJSON.c:1575 | 检查 number | 不匹配（开头是 `{` 而非数字） |
+| 11 | cJSON.c:1580 | 检查 array | 不匹配（开头是 `{` 而非 `[`） |
+| 12 | cJSON.c:1585 | 检查 object | **匹配！buffer_at_offset[0] == '{'** |
+| 13 | cJSON.c:1587 | 调用 parse_object | 进入对象解析函数 |
+| 14 | cJSON.c:1829 | 进入 parse_object | 准备解析对象内容 |
+| 15 | cJSON.c:1833 | 检查深度限制 | 当前 depth=0，未超限 |
+| 16 | cJSON.c:1837 | depth++ | 深度增加到 1 |
+| 17 | cJSON.c:1839 | 检查开头 '{' | 匹配，确认为对象 |
+| 18 | cJSON.c:1844 | offset++ | 跳过 '{'，offset 从 0→1 |
+| 19 | cJSON.c:1845 | buffer_skip_whitespace | 跳过空白（无空白） |
+| 20 | cJSON.c:1846 | 检查空对象 | 不是 `}`，非空对象 |
+| 21 | cJSON.c:1859 | offset-- | 为循环逻辑调整 offset |
+| 22 | cJSON.c:1864 | 调用 cJSON_New_Item | 分配新节点存储键值对 |
+| 23 | cJSON.c:296 | 分配内存 | hooks->allocate 分配 64 字节，返回 0x55555555f2f0 |
+| 24 | cJSON.c:299 | memset 清零 | 所有字段初始化为 0 |
+| 25 | cJSON.c:302 | 返回 node | 返回到 parse_object:1864 |
+| 26 | cJSON.c:1874 | head = new_item | 初始化链表头 |
+| 27 | cJSON.c:1890 | offset++ | 调整 offset 准备解析键 |
+| 28 | cJSON.c:1891 | buffer_skip_whitespace | 跳过空白 |
+| 29 | cJSON.c:1892 | 调用 parse_string | 解析键名 "a" |
+| 30 | cJSON.c:958 | 进入 parse_string | 开始字符串解析 |
+| 31 | cJSON.c:979 | while 循环找结尾 | 找到 `"` 位置，字符串长度为 1（"a"） |
+| 32 | cJSON.c:1004 | 分配内存 | allocate(2) 分配 2 字节存储 "a\0" |
+| 33 | cJSON.c:1018 | memcpy 复制 | 复制字符 'a' 到 output |
+| 34 | cJSON.c:1071 | 添加 '\0' | 字符串结束符 |
+| 35 | cJSON.c:1073 | 设置 type | item->type = cJSON_String (16) |
+| 36 | cJSON.c:1074 | 设置 valuestring | item->valuestring = "a" |
+| 37 | cJSON.c:1077 | offset++ | 跳过结尾 `"`，offset 更新 |
+| 38 | cJSON.c:1079 | 返回 true | 返回到 parse_object:1892 |
+| 39 | cJSON.c:1899 | 移动键名 | current_item->string = valuestring（键名移到 string 字段） |
+| 40 | cJSON.c:1900 | 清空 valuestring | current_item->valuestring = NULL（准备存值） |
+| 41 | cJSON.c:1908 | offset++ | 跳过冒号 ':'，offset 从 4→5 |
+| 42 | cJSON.c:1909 | buffer_skip_whitespace | 跳过空白（无空白） |
+| 43 | cJSON.c:1910 | 调用 parse_value | **递归调用，解析值 "1"** |
+| 44 | cJSON.c:1540 | 再次进入 parse_value | 第二次进入，解析值部分 |
+| 45 | cJSON.c:1575 | 检查 number | **匹配！buffer_at_offset[0] == '1'** |
+| 46 | cJSON.c:1577 | 调用 parse_number | 进入数字解析 |
+| 47 | cJSON.c:419 | for 循环 | 遍历数字字符 |
+| 48 | cJSON.c:439 | 记录长度 | number_string_length = 1（数字 "1"） |
+| 49 | cJSON.c:454 | 分配内存 | allocate(2) 存储 "1\0" |
+| 50 | cJSON.c:460 | memcpy 复制 | 复制 "1" |
+| 51 | cJSON.c:488 | 调用 strtod | 将字符串 "1" 转换为 double 类型数字 1.0 |
+| 52 | - | 程序完成 | parse_number 返回，逐层返回到 main，程序正常退出 |
+
+#### 【变量状态追踪】
+
+```c
+// 步骤 23: cJSON_New_Item 返回后
+(gdb) print node
+$2 = (cJSON *) 0x55555555f2f0
+(gdb) print *node
+$3 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, valueint = 0, 
+      valuedouble = 0, string = 0x0}
+
+// 步骤 31: parse_string 中找到字符串
+(gdb) print input_end
+$4 = (const unsigned char *) 0x55555555b006 "a\":1}"
+(gdb) print input_pointer
+$5 = (const unsigned char *) 0x55555555b006 "a\":1}"
+
+// 步骤 34: 分配字符串内存后
+(gdb) print number_c_string
+$16 = (unsigned char *) 0x55555555f360 ""
+(gdb) print number_c_string
+$17 = (unsigned char *) 0x55555555f360 "1"
+
+// 步骤 36: parse_string 设置 valuestring 后
+(gdb) print *item
+$9 = {next = 0x0, prev = 0x0, child = 0x0, type = 16, valuestring = 0x55555555f340 "a", 
+      valueint = 0, valuedouble = 0, string = 0x0}
+
+// 步骤 41: 跳过冒号后
+(gdb) print input_buffer->content[input_buffer->offset]
+$10 = 58 ':'
+(gdb) print input_buffer->offset
+$11 = 4
+// 跳过后
+(gdb) print input_buffer->offset
+$12 = 5
+
+// 步骤 43: 第二次进入 parse_value 前的 buffer 状态
+(gdb) print *input_buffer
+$14 = {content = 0x55555555b004 "{\"a\":1}", length = 8, offset = 5, depth = 1, hooks = {
+    allocate = 0x7ffff7e310e0 <__GI___libc_malloc>, deallocate = 0x7ffff7e316d0 <__GI___libc_free>, 
+    reallocate = 0x7ffff7e31e80 <__GI___libc_realloc>}}
+```
+
+#### 【关键发现】
+
+**观察到的现象**：
+
+1. **parse_value 的递归特性**：
+   - 第一次调用 parse_value 时解析整个 JSON，根据 `{` 分派到 parse_object
+   - parse_object 在解析完键名后，再次调用 parse_value 解析值部分
+   - 这是递归下降解析器的核心：parse_object → parse_value → parse_number
+
+2. **键值对的处理方式**：
+   - 键名先由 parse_string 解析到 `valuestring`
+   - 然后手动移到 `string` 字段：`current_item->string = current_item->valuestring`
+   - 最后清空 `valuestring = NULL`，为存储值做准备
+   - 值解析后存到 `valuestring`（字符串/数字）或 `valuedouble`（数字）
+
+3. **对象链表的构建**：
+   - `head` 指向链表头，`current_item` 指向当前处理的节点
+   - 第一个键值对时：`head = current_item = new_item`
+   - 后续键值对通过 `next` 指针连接（本例只有一个键值对，未展示）
+
+4. **字符串解析流程**：
+   - 先遍历找到结尾 `"`，计算长度
+   - 分配内存（长度+1，包含 `\0`）
+   - memcpy 复制内容
+   - 无需转义处理（"a" 无转义字符）
+
+5. **数字解析流程**：
+   - 提取数字字符（"1"）到临时缓冲区
+   - 调用 strtod 转换为 double
+   - 返回后设置到节点的 value 字段
+
+**调用栈**（完整嵌套关系）：
+```
+#0 parse_number (cJSON.c:401)
+#1 parse_value (cJSON.c:1577)
+#2 parse_object (cJSON.c:1910)  <- 第二次调用 parse_value
+#3 parse_value (cJSON.c:1587)
+#4 cJSON_ParseWithLengthOpts (内部)
+#5 cJSON_ParseWithOpts (cJSON.c:1305)
+#6 cJSON_Parse (cJSON.c:1400)
+#7 main (main.c:236)
+```
+
+**内存布局**（解析 `{"a":1}` 后）：
+```
+根节点 (cJSON_Object, type=64)
+    ├── child ────▶ 键值对节点 (第一个子节点)
+    │                  ├── type: cJSON_String (16) | cJSON_Number (8)? 
+    │                  ├── string: "a" (键名)
+    │                  ├── valuedouble: 1.0 (数字值)
+    │                  ├── next: NULL
+    │                  └── prev: NULL (头节点 prev 特殊处理)
+    └── (对象本身无 valuestring)
+```
+
+#### 【现场想法】
+- parse_value 的递归调用是理解解析器的关键：遇到 object/array 会递归，遇到基本类型直接返回
+
+- **为什么键名要先存 valuestring，再移到 string？**
+  
+  parse_string 是一个"通用工具函数"，它只有**一个口袋**（valuestring）放解析出来的字符串。
+  
+  但 JSON 里字符串有两类用途：
+  1. **键名**（`"a"` in `{"a":1}`）→ 需要存到 `string` 字段
+  2. **值**（`"hello"` in `{"msg":"hello"}`）→ 需要存到 `valuestring` 字段
+  
+  parse_string **分不清**自己是被抓来解析键名还是值，它只会往 valuestring 塞。
+  
+  所以 parse_object 做了调整：
+  ```
+  parse_string("a") → valuestring = "a"
+  parse_object 调整：string = "a", valuestring = NULL（准备存值）
+  parse_value(1)   → valuedouble = 1
+  ```
+  
+  这样做的好处：parse_string 保持简单通用，到处都能用。缺点是调用者需要知道上下文，手动调整位置。
+  
+  对比如果 parse_string 有两个口袋的方案：
+  - 需要传额外参数（is_key?）
+  - parse_string 内部要有 if-else 判断
+  - 每次调用都要想清楚"这是键还是值"
+  
+  cJSON 选择了"工具函数只管干活，调用者根据场景调整"的设计。
+
+- buffer->offset 的递增逻辑需要仔细跟踪，特别是 skip_whitespace 前后的变化
+- 为什么数字也要分配内存再 strtod？不能直接解析吗？可能是为了处理小数点和科学计数法的复杂性
+
+#### 【已验证的疑问】
+- [x] parse_value 如何根据首字符分派？-> 一系列 if 判断，从 null/false/true 到 string/number/array/object
+- [x] parse_object 的链表如何构建？-> head 保存链表头，current_item 指向当前节点
+- [x] 键名如何存储？-> 先存 valuestring，再移到 string 字段，值存 valuestring/valuedouble
+- [x] parse_value 会被调用几次？-> 本例中 2 次：外层解析对象，内层解析值
+
+#### 【下一步计划】
+- [ ] 追踪嵌套对象（如 `{"outer":{"inner":1}}`）观察更深的递归层级
+- [ ] 追踪数组解析（parse_array），对比与 parse_object 的差异
+- [ ] 观察解析失败时的错误处理流程
+- [ ] 测试带转义字符的字符串解析（如 `"hello\nworld"`）
+
+#### 【终端记录】
+详见 `scripts/09.txt`
+[09.txt](./scripts/09.txt)
+
+---
+
 ## 阶段性总结（可选）
 
 ### 已调试的函数
@@ -993,6 +1219,7 @@ cJSON_InitHooks(hooks):
 - [x] cJSON_CreateString (2026-02-16)
 - [x] cJSON_CreateStringReference (2026-02-17)
 - [x] cJSON_InitHooks (2026-02-18)
+- [x] cJSON_Parse (2026-02-18) - 包括 parse_value, parse_object, parse_string, parse_number
 
 ### 累积的疑问
 - 类型标志位的设计意图?
