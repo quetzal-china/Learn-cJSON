@@ -1235,31 +1235,150 @@ gdb ./main
 #### 【执行路径记录】
 | 步骤 | 位置 | 操作 | 观察结果 |
 |------|------|------|----------|
-| 1 | | | |
+| 1 | cJSON.c:1399 | 进入 cJSON_Parse | 入口函数，解析 `{"outer":{"inner":1}}` |
+| 2 | cJSON.c:1540 | 进入 parse_value | 第1次进入，检测到 `{` |
+| 3 | cJSON.c:1829 | 进入 parse_object | **第1次**（外层对象），item=0x55555555f2a0 |
+| 4 | cJSON.c:1837 | depth++ | depth 从 0→1 |
+| 5 | cJSON.c:1844 | 跳过 `{` | offset 递增 |
+| 6 | cJSON.c:1864 | cJSON_New_Item | 创建节点存储 "outer" 键值对 |
+| 7 | cJSON.c:1892 | parse_string("outer") | 解析键名 |
+| 8 | cJSON.c:1899 | 键名移到 string | string="outer", valuestring=NULL |
+| 9 | cJSON.c:1910 | parse_value | 发现值是 `{`，**第2次进入** parse_value |
+| 10 | cJSON.c:1829 | 进入 parse_object | **第2次**（内层对象），item=0x55555555f2f0 |
+| 11 | cJSON.c:1837 | depth++ | depth 从 1→2 |
+| 12 | - | 完成内层解析 | 解析 `{"inner":1}` |
+| 13 | - | 返回外层 | 内层完成，返回到外层 parse_object |
+| 14 | - | 完成外层解析 | 外层完成，程序退出 |
 
 #### 【变量状态追踪】
+
 ```c
-// 待填写
+// 第1次 parse_object（外层）返回后
+(gdb) backtrace
+#0  parse_object (item=0x55555555f2f0, input_buffer=...) at cJSON.c:1829  // 内层
+#1  parse_value (item=0x55555555f2f0, ...) at cJSON.c:1587
+#2  parse_object (item=0x55555555f2a0, ...) at cJSON.c:1910              // 外层
+#3  parse_value (item=0x55555555f2a0, ...) at cJSON.c:1587
+#4  cJSON_ParseWithLengthOpts(...) at cJSON.c:1342
+...
+
+// depth 值
+第1次 parse_object: depth = 1
+第2次 parse_object: depth = 2
+
+// 节点结构（内层，"outer" 键值对节点）
+(gdb) print *item  // item=0x55555555f2f0
+$3 = {next = 0x0, prev = 0x0, child = 0x0, type = 16, valuestring = 0x0, 
+      string = 0x55555555f340 "outer"}
+
+// 节点结构（外层，根节点）
+(gdb) frame 2
+(gdb) print *item  // item=0x55555555f2a0
+$4 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, string = 0x0}
+// 注意：此时还未设置 type=Object 和 child 指针
 ```
 
 #### 【关键发现】
 
 **观察到的现象**：
-1. 
 
-**调用栈深度变化**：
+1. **parse_object 被调用了 2 次**：
+   - 第1次：解析外层对象 `{"outer":...}`（depth=1）
+   - 第2次：解析内层对象 `{"inner":1}`（depth=2）
+   - 嵌套触发递归调用
+
+2. **depth 递增机制**：
+   - 每次进入 parse_object，depth++
+   - 用于限制嵌套层数，防止栈溢出
+   - 本例中最大 depth=2
+
+3. **调用栈深度**：
+   ```
+   #0 parse_object(内层 "inner")    ← 当前执行，depth=2
+   #1 parse_value
+   #2 parse_object(外层 "outer")    ← 等待内层返回，depth=1
+   #3 parse_value
+   #4 cJSON_ParseWithLengthOpts
+   ```
+
+4. **键值对处理**（嵌套对象场景）：
+   - **外层节点**（"outer" 键值对）：
+     - `string = "outer"`（键名）
+     - `type` 在调试时显示为 16（String），但实际完成时应为 Object
+     - `child` 应指向内层对象（但调试时还未链接）
+   - **内层节点**（"inner" 键值对）：
+     - `string = "inner"`（键名）
+     - `valuedouble = 1`（数字值）
+
+**调用栈深度对比**：
 ```
-待填写
+单层对象 {"a":1}:
+  #0 parse_object  [1层]
+
+嵌套对象 {"outer":{"inner":1}}:
+  #0 parse_object(内层)  [2层]
+  #2 parse_object(外层)  [1层]
 ```
+
+**与单层对象的差异**：
+| 特性 | {"a":1} | {"outer":{"inner":1}} |
+|------|---------|------------------------|
+| parse_object 调用次数 | 1次 | **2次** |
+| 最大 depth | 1 | **2** |
+| 调用栈深度 | 2层 | **3层** |
+| 是否递归 | 否 | **是** |
 
 #### 【现场想法】
-- 
+
+- **嵌套的本质是递归**：parse_object 遇到值是 `{` 时，递归调用 parse_value → parse_object
+- **调用栈像俄罗斯套娃**：外层对象等内层对象解析完，才能继续
+- **depth 是保护伞**：防止 `{"a":{"b":{"c":...}}}` 无限嵌套导致栈溢出
+
+- **键值对怎么处理？**（重点理解）：
+  
+  内存结构示意：
+  ```
+  根节点 (Object)
+  ├─ child ────────┐
+  │                ▼
+  │        ┌──────────────┐
+  │        │ "outer" 节点  │
+  │        │ ├─ string: "outer"
+  │        │ ├─ type: Object (64)
+  │        │ └─ child ────────┐    ← 值是对象，用 child 链接
+  │        │                  ▼
+  │        │          ┌────────────────────┐
+  │        │          │ "inner" 节点        │
+  │        │          │ ├─ string: "inner" │
+  │        │          │ └─ valuedouble: 1  │
+  └────────┴──────────┴────────────────────┘
+  ```
+  
+  对比两种键值对：
+  | 键值对 | 键存哪里 | 值存哪里 |
+  |--------|---------|---------|
+  | `"a":1` | `string="a"` | `valuedouble=1`（基本类型，直接存） |
+  | `"outer":{...}` | `string="outer"` | `child` 指向内层对象（对象类型，指针链接） |
+  
+  **核心规律**：
+  - 值是基本类型（数字/字符串）：直接存字段（valuedouble/valuestring）
+  - 值是对象/数组：`child` 指针指向子节点（递归链接）
+  
+  这就是为什么嵌套对象要用递归：每个对象都有自己的 child 链，child 又可以有自己的 child，形成树形结构。
+
+- **调试观察**：在内层 parse_object 执行时，外层 parse_object 的栈帧还在，只是暂停等待。这验证了递归的工作方式。
 
 #### 【已验证的疑问】
-- [ ] 
+- [x] 嵌套对象会触发 parse_object 递归调用？-> **是**，本例调用了 2 次
+- [x] depth 如何变化？-> **0→1→2**，每次进入 parse_object 递增
+- [x] 调用栈深度？-> **3层**（内层→parse_value→外层→parse_value→...）
+- [x] 键值对的值是对象时如何链接？-> **`child` 指针**指向内层对象
 
 #### 【下一步计划】
-- [ ] 
+- [ ] 追踪数组 `[1,2,3]`，对比 parse_array 与 parse_object 的差异
+- [ ] 观察解析失败时的错误处理流程
+- [ ] 测试带转义字符的字符串解析
+- [ ] 追踪 cJSON_Print 序列化流程
 
 #### 【终端记录】
 详见 `scripts/10.txt`
@@ -1276,7 +1395,8 @@ gdb ./main
 - [x] cJSON_CreateString (2026-02-16)
 - [x] cJSON_CreateStringReference (2026-02-17)
 - [x] cJSON_InitHooks (2026-02-18)
-- [x] cJSON_Parse (2026-02-18) - 包括 parse_value, parse_object, parse_string, parse_number
+- [x] cJSON_Parse - 单层对象 `{"a":1}` (2026-02-18)
+- [x] cJSON_Parse - 嵌套对象 `{"outer":{"inner":1}}` (2026-02-18)
 
 ### 累积的疑问
 - 类型标志位的设计意图?

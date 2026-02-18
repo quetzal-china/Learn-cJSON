@@ -1,0 +1,132 @@
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb)  break cJSON_Parse
+Breakpoint 1 at 0x2e5c: file cJSON.c, line 1399.
+(gdb) break parse_object
+Breakpoint 2 at 0x3c94: file cJSON.c, line 1829.
+(gdb) break parse_value
+Breakpoint 3 at 0x32f4: file cJSON.c, line 1540.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+
+Breakpoint 1, cJSON_Parse (value=0x55555555a630 <__libc_csu_init> "\363\017\036\372AWL\215=\023\067") at cJSON.c:1399
+1399    {
+(gdb) continue
+Continuing.
+
+Breakpoint 3, parse_value (item=0x7fffffffd150, input_buffer=0x34000000340) at cJSON.c:1540
+1540    {
+(gdb) print input_buffer->depth
+Cannot access memory at address 0x34000000358
+(gdb) n
+1541        if ((input_buffer == NULL) || (input_buffer->content == NULL))
+(gdb) n
+1548        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "null", 4) == 0))
+(gdb) n
+1555        if (can_read(input_buffer, 5) && (strncmp((const char*)buffer_at_offset(input_buffer), "false", 5) == 0))
+(gdb) n
+1562        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "true", 4) == 0))
+(gdb) n
+1570        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '\"'))
+(gdb) n
+1575        if (can_access_at_index(input_buffer, 0) && ((buffer_at_offset(input_buffer)[0] == '-') || ((buffer_at_offset(input_buffer)[0] >= '0') && (buffer_at_offset(input_buffer)[0] <= '9'))))
+(gdb) n
+1580        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '['))
+(gdb) n
+1585        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '{'))
+(gdb) n
+1587            return parse_object(item, input_buffer);
+(gdb) step
+
+Breakpoint 2, parse_object (item=0x7ffff7e30ba2 <malloc_hook_ini+146>, input_buffer=0x0) at cJSON.c:1829
+1829    {
+(gdb) n
+1830        cJSON *head = NULL; /* linked list head */
+(gdb) n
+1831        cJSON *current_item = NULL;
+(gdb) n
+1833        if (input_buffer->depth >= CJSON_NESTING_LIMIT)
+(gdb) n
+1837        input_buffer->depth++;
+(gdb) n
+1839        if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '{'))
+(gdb) print input_buffer->depth
+$1 = 1
+(gdb) continue
+Continuing.
+
+Breakpoint 3, parse_value (item=0x7fffffffd150, input_buffer=0x6) at cJSON.c:1540
+1540    {
+(gdb) print input_buffer->depth
+Cannot access memory at address 0x1e
+(gdb) continue
+Continuing.
+
+Breakpoint 2, parse_object (item=0x55555555f2f0, input_buffer=0x7fffffffd150) at cJSON.c:1829
+1829    {
+(gdb) n
+1830        cJSON *head = NULL; /* linked list head */
+(gdb) n
+1831        cJSON *current_item = NULL;
+(gdb) n
+1833        if (input_buffer->depth >= CJSON_NESTING_LIMIT)
+(gdb) n
+1837        input_buffer->depth++;
+(gdb) n
+1839        if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '{'))
+(gdb) print input_buffer->depth
+$2 = 2
+(gdb) bt
+#0  parse_object (item=0x55555555f2f0, input_buffer=0x7fffffffd150) at cJSON.c:1839
+#1  0x00005555555575e7 in parse_value (item=0x55555555f2f0, input_buffer=0x7fffffffd150) at cJSON.c:1587
+#2  0x0000555555557f1f in parse_object (item=0x55555555f2a0, input_buffer=0x7fffffffd150) at cJSON.c:1910
+#3  0x00005555555575e7 in parse_value (item=0x55555555f2a0, input_buffer=0x7fffffffd150) at cJSON.c:1587
+#4  0x0000555555556d5b in cJSON_ParseWithLengthOpts (value=0x55555555b004 "{\"outer\":{\"inner\":1}}", 
+    buffer_length=22, return_parse_end=0x0, require_null_terminated=0) at cJSON.c:1342
+#5  0x0000555555556c49 in cJSON_ParseWithOpts (value=0x55555555b004 "{\"outer\":{\"inner\":1}}", 
+    return_parse_end=0x0, require_null_terminated=0) at cJSON.c:1305
+#6  0x0000555555556e82 in cJSON_Parse (value=0x55555555b004 "{\"outer\":{\"inner\":1}}") at cJSON.c:1400
+#7  0x00005555555552ac in main () at main.c:248
+(gdb) print *item  
+$3 = {next = 0x0, prev = 0x0, child = 0x0, type = 16, valuestring = 0x0, valueint = 0, valuedouble = 0, 
+  string = 0x55555555f340 "outer"}
+(gdb) frame 2   
+#2  0x0000555555557f1f in parse_object (item=0x55555555f2a0, input_buffer=0x7fffffffd150) at cJSON.c:1910
+1910            if (!parse_value(current_item, input_buffer))
+(gdb)  print *item
+$4 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb)  print *(item->child)  
+Cannot access memory at address 0x0
+(gdb) frame 0
+#0  parse_object (item=0x55555555f2f0, input_buffer=0x7fffffffd150) at cJSON.c:1839
+1839        if (cannot_access_at_index(input_buffer, 0) || (buffer_at_offset(input_buffer)[0] != '{'))
+(gdb) cin
+Undefined command: "cin".  Try "help".
+(gdb) continue
+Continuing.
+
+Breakpoint 3, parse_value (item=0x7fffffffd150, input_buffer=0x6) at cJSON.c:1540
+1540    {
+(gdb) continue
+Continuing.
+[Inferior 1 (process 700714) exited normally]
+(gdb) 1
+Undefined command: "1".  Try "help".
+(gdb) q
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ 
