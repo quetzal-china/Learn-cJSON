@@ -235,8 +235,8 @@ $11 = {next = 0x0, prev = 0x0, child = 0x0, type = 4, valuestring = 0x0,
 - [x] cJSON_New_Item 在哪清零内存? -> cJSON.c:299，memset(node, '\0', sizeof(cJSON))
 
 #### 【下一步计划】
-- [ ] cJSON_InitHooks 如何工作?用户如何自定义内存分配器?
-- [ ] cJSON_Delete 如何配合 hooks 释放内存?
+- [x] cJSON_InitHooks 如何工作?用户如何自定义内存分配器?
+- [x] cJSON_Delete 如何配合 hooks 释放内存?
 - [ ] 如果分配失败（malloc 返回 NULL），后续流程如何处理?
 
 #### 【调试截图】
@@ -338,7 +338,7 @@ main -> cJSON_Delete -> global_hooks.deallocate -> __GI___libc_free
 
 #### 【下一步计划】
 - [x] cJSON_Delete 如何配合 hooks 释放内存? -> cJSON.c:329，global_hooks.deallocate
-- [ ] 深入测试：复杂节点（带 child、valuestring）的递归删除过程
+- [x] 深入测试：复杂节点（带 child、valuestring）的递归删除过程
 
 #### 【调试截图】
 
@@ -477,8 +477,8 @@ if (!(item->type & cJSON_IsReference) && (item->child != NULL))
 - 释放 valuestring 和 string 是因为解析时分配了内存
 
 #### 【下一步计划】
-- [ ] cJSON_InitHooks 如何工作?
-- [ ] cJSON_CreateString 流程
+- [x] cJSON_InitHooks 如何工作?
+- [x] cJSON_CreateString 流程
 
 #### 【终端记录】
 详见 `scripts/04.txt`
@@ -591,8 +591,8 @@ valuestring: hello world
 - 创建的节点拥有字符串内容的所有权，删除时需要释放两段内存
 
 #### 【下一步计划】
-- [ ] cJSON_InitHooks 如何工作?
-- [ ] 对比 cJSON_CreateString vs cJSON_CreateStringReference 的区别?
+- [x] cJSON_InitHooks 如何工作?
+- [x] 对比 cJSON_CreateString vs cJSON_CreateStringReference 的区别?
 
 #### 【终端记录】
 详见 `scripts/05.txt`
@@ -701,7 +701,7 @@ cJSON_CreateStringReference (引用):
 
 #### 【下一步计划】
 - [x] 对比 cJSON_CreateString vs cJSON_CreateStringReference 的区别?
-- [ ] cJSON_Delete 如何处理引用节点?（验证不释放 valuestring）
+- [x] cJSON_Delete 如何处理引用节点?（验证不释放 valuestring）
 
 #### 【调试截图】
 
@@ -833,12 +833,154 @@ cJSON_Delete(引用节点):
 
 #### 【下一步计划】
 - [x] cJSON_Delete 处理引用节点 -> 验证完成
-- [ ] cJSON_InitHooks 如何工作?
+- [x] cJSON_InitHooks 如何工作?
 - [ ] cJSON_Parse 解析流程
 
 #### 【终端记录】
 详见 `scripts/07.txt`
 [07.txt](./scripts/07.txt)
+
+---
+
+### 笔记 08 | 2026-2-18 | 追踪目标：[cJSON_InitHooks]
+
+#### 【调试目标】
+- **问题**: cJSON_InitHooks 如何设置自定义内存分配器?global_hooks 如何被修改?reallocate 何时启用?
+- **入口点**: cJSON.c:254
+- **预期路径**: 检查hooks参数 -> 设置global_hooks各字段 -> 处理reallocate逻辑
+
+#### 【GDB 命令序列】
+```bash
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动
+gdb ./main
+# 设置断点
+(gdb) break cJSON_InitHooks
+(gdb) break cJSON_New_Item
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | cJSON.c:295 | 调用 cJSON_New_Item(默认分配器) | 分配64字节，返回 0x55555555f6b0 |
+| 2 | 输出 | 创建字符串"hello" | 使用默认malloc，无计数输出 |
+| 3 | cJSON.c:255 | 进入 cJSON_InitHooks | hooks参数指向自定义分配器结构 |
+| 4 | cJSON.c:259 | if (hooks == NULL) | 条件为false，跳过默认初始化 |
+| 5 | cJSON.c:268 | global_hooks.allocate = malloc | 先设为默认malloc |
+| 6 | cJSON.c:269 | if (hooks->malloc_fn != NULL) | 条件为true，my_malloc有效 |
+| 7 | cJSON.c:271 | global_hooks.allocate = hooks->malloc_fn | 设置为my_malloc |
+| 8 | cJSON.c:274 | global_hooks.deallocate = free | 先设为默认free |
+| 9 | cJSON.c:275 | if (hooks->free_fn != NULL) | 条件为true，my_free有效 |
+| 10 | cJSON.c:277 | global_hooks.deallocate = hooks->free_fn | 设置为my_free |
+| 11 | cJSON.c:285 | global_hooks.reallocate = NULL | 初始化为NULL |
+| 12 | cJSON.c:286 | 检查是否使用标准分配器 | allocate!=malloc且deallocate!=free，reallocate保持NULL |
+| 13 | cJSON.c:295 | 调用 cJSON_New_Item(自定义分配器) | [自定义malloc] size=64, ptr=0x55555555f6b0, 次数=1 |
+| 14 | cJSON.c:2694 | 分配valuestring内存 | [自定义malloc] size=6, ptr=0x55555555f700, 次数=2 |
+| 15 | cJSON.c:329 | 删除节点 | [自定义free] ptr=0x55555555f700, 次数=1；[自定义free] ptr=0x55555555f6b0, 次数=2 |
+| 16 | cJSON.c:255 | 再次进入 cJSON_InitHooks(NULL) | 重置为默认分配器 |
+| 17 | cJSON.c:259 | if (hooks == NULL) | 条件为true，使用默认malloc/free/realloc |
+| 18 | cJSON.c:295 | 创建"default again" | 使用默认分配器，无计数输出 |
+
+#### 【变量状态追踪】
+```c
+// 步骤3: 进入cJSON_InitHooks前
+(gdb) print *hooks
+$1 = {malloc_fn = 0x1, free_fn = 0x7fffffffd7b8}
+(gdb) print global_hooks
+$2 = {allocate = 0x5555555551f0 <malloc@plt>, 
+      deallocate = 0x555555555130 <free@plt>, 
+      reallocate = 0x7ffff7e31e80 <__GI___libc_realloc>}
+
+// 步骤5-6: 设置allocate前
+(gdb) print hooks->malloc_fn
+$3 = (void *(*)(size_t)) 0x555555555309 <my_malloc>
+(gdb) print hooks->free_fn
+$4 = (void (*)(void *)) 0x555555555364 <my_free>
+(gdb) print global_hooks.allocate
+$5 = (void *(*)(size_t)) 0x5555555551f0 <malloc@plt>
+
+// 步骤7: 设置allocate后
+(gdb) print global_hooks.allocate
+$7 = (void *(*)(size_t)) 0x555555555309 <my_malloc>
+
+// 步骤10: 设置deallocate后
+(gdb) print global_hooks.deallocate
+$10 = (void (*)(void *)) 0x555555555364 <my_free>
+
+// 步骤11-12: reallocate被设为NULL
+(gdb) print global_hooks.reallocate
+$12 = (void *(*)(void *, size_t)) 0x0
+```
+
+#### 【关键发现】
+
+**cJSON_InitHooks 工作机制**:
+1. **NULL参数处理**: 如果hooks为NULL，则重置global_hooks为标准malloc/free/realloc
+2. **allocate设置**: 先设为默认malloc，如果hooks->malloc_fn不为NULL则覆盖为自定义函数
+3. **deallocate设置**: 先设为默认free，如果hooks->free_fn不为NULL则覆盖为自定义函数
+4. **reallocate设置**: 初始化为NULL，只有当allocate和deallocate都是标准库函数时，才设为realloc
+
+**执行流程图**:
+```
+cJSON_InitHooks(hooks):
+    if (hooks == NULL):
+        global_hooks = {malloc, free, realloc}  // 重置为默认
+        return
+    
+    // 设置allocate
+    global_hooks.allocate = malloc
+    if (hooks->malloc_fn != NULL):
+        global_hooks.allocate = hooks->malloc_fn
+    
+    // 设置deallocate
+    global_hooks.deallocate = free
+    if (hooks->free_fn != NULL):
+        global_hooks.deallocate = hooks->free_fn
+    
+    // 设置reallocate
+    global_hooks.reallocate = NULL
+    if (global_hooks.allocate == malloc && global_hooks.deallocate == free):
+        global_hooks.reallocate = realloc  // 仅当使用标准分配器时启用
+```
+
+**内存分配器切换验证**:
+```
+阶段1: 默认分配器
+  cJSON_CreateString -> cJSON_New_Item -> malloc (无输出)
+
+阶段2: 自定义分配器  
+  cJSON_CreateString -> cJSON_New_Item -> my_malloc (输出计数)
+  创建valuestring -> my_malloc (输出计数)
+  
+阶段3: 重置默认
+  cJSON_InitHooks(NULL) -> 恢复malloc/free
+  cJSON_CreateString -> malloc (无输出)
+```
+
+**reallocate == NULL时的处理**:
+- 当使用自定义分配器时，global_hooks.reallocate被设为NULL
+- cJSON内部会在需要reallocate的地方检查该字段，如果为NULL则使用allocate+memcpy+deallocate的组合来模拟realloc
+
+#### 【现场想法】
+- cJSON_InitHooks允许嵌入式系统或特殊环境替换内存分配器（如使用内存池、跟踪分配等）
+- reallocate只有在确认使用标准malloc/free时才启用，确保行为一致性
+- 自定义分配器可以用来调试内存泄漏（通过计数）、监控分配大小等
+- 输出中的alloc_count=2, free_count=2验证了两次分配（节点+字符串）和两次释放
+
+#### 【已验证的疑问】
+- [x] global_hooks如何被修改? -> 通过函数指针赋值，第268-277行
+- [x] reallocate何时启用? -> 仅当使用标准malloc/free时，第286-287行
+- [x] cJSON_InitHooks(NULL)如何重置? -> 直接设为malloc/free/realloc，第261-265行
+
+#### 【下一步计划】
+- [ ] 探索reallocate为NULL时的替代实现逻辑
+- [ ] 测试cJSON_Parse使用自定义分配器的场景
+
+#### 【终端记录】
+详见 `scripts/08.txt`
+[08.txt](./scripts/08.txt)
 
 ---
 
@@ -850,7 +992,7 @@ cJSON_Delete(引用节点):
 - [x] cJSON_Delete (2026-02-16)
 - [x] cJSON_CreateString (2026-02-16)
 - [x] cJSON_CreateStringReference (2026-02-17)
-- [ ] cJSON_InitHooks
+- [x] cJSON_InitHooks (2026-02-18)
 
 ### 累积的疑问
 - 类型标志位的设计意图?

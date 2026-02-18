@@ -1,0 +1,164 @@
+ros:foxy(1) noetic(2) ?
+1
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb) break cJSON_InitHooks
+Breakpoint 1 at 0x175b: file cJSON.c, line 255.
+(gdb) break cJSON_New_Item
+Breakpoint 2 at 0x1830: file cJSON.c, line 295.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+=== 测试 cJSON_InitHooks ===
+
+--- 默认分配器 ---
+
+Breakpoint 2, cJSON_New_Item (hooks=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:295
+295     {
+(gdb) list
+290     }
+291
+292     /* Internal constructor. */
+293     /* 构建一个新的cJSON项, 使用传入的内存管理钩子(实际调用时为global_hooks) */
+294     static cJSON *cJSON_New_Item(const internal_hooks * const hooks)
+295     {
+296         cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));
+297         if (node)
+298         {
+299             memset(node, '\0', sizeof(cJSON));
+(gdb) c
+Continuing.
+创建成功: valuestring=hello
+
+删除完成
+
+--- 设置自定义分配器 ---
+
+Breakpoint 1, cJSON_InitHooks (hooks=0x7fffffffd300) at cJSON.c:255
+255     {
+(gdb) list
+250     }
+251
+252     /* 用于初始化工具集，细节存疑 */
+253     /* 内存管理钩子初始化函数 ，允许用户自定义内存分配和释放策略 */
+254     CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
+255     {
+256         /* 
+257         如果传入空的cJSON_Hooks指针,则初始化global_hooks为malloc, free, realloc
+258         */
+259         if (hooks == NULL)
+(gdb) print *hooks
+$1 = {malloc_fn = 0x1, free_fn = 0x7fffffffd7b8}
+(gdb) print global_hooks
+$2 = {allocate = 0x5555555551f0 <malloc@plt>, deallocate = 0x555555555130 <free@plt>, 
+  reallocate = 0x7ffff7e31e80 <__GI___libc_realloc>}
+(gdb) n
+259         if (hooks == NULL)
+(gdb) n
+268         global_hooks.allocate = malloc;
+(gdb) print hooks->malloc_fn
+$3 = (void *(*)(size_t)) 0x555555555309 <my_malloc>
+(gdb) print hooks->free_fn
+$4 = (void (*)(void *)) 0x555555555364 <my_free>
+(gdb) n
+269         if (hooks->malloc_fn != NULL)
+(gdb) print global_hooks.allocate
+$5 = (void *(*)(size_t)) 0x5555555551f0 <malloc@plt>
+(gdb) n
+271             global_hooks.allocate = hooks->malloc_fn;
+(gdb) print global_hooks.allocate
+$6 = (void *(*)(size_t)) 0x5555555551f0 <malloc@plt>
+(gdb) n
+274         global_hooks.deallocate = free;
+(gdb) print global_hooks.allocate
+$7 = (void *(*)(size_t)) 0x555555555309 <my_malloc>
+(gdb) print global_hooks.deaalocate
+There is no member named deaalocate.
+(gdb) print global_hooks.deallocate
+$8 = (void (*)(void *)) 0x555555555130 <free@plt>
+(gdb) n
+275         if (hooks->free_fn != NULL)
+(gdb) print global_hooks.deallocate
+$9 = (void (*)(void *)) 0x555555555130 <free@plt>
+(gdb) n
+277             global_hooks.deallocate = hooks->free_fn;
+(gdb) n
+285         global_hooks.reallocate = NULL;
+(gdb) print global_hooks.deallocate
+$10 = (void (*)(void *)) 0x555555555364 <my_free>
+(gdb) print global_hooks.reallocate
+$11 = (void *(*)(void *, size_t)) 0x7ffff7e31e80 <__GI___libc_realloc>
+(gdb) n
+286         if ((global_hooks.allocate == malloc) && (global_hooks.deallocate == free))
+(gdb) print global_hooks.reallocate
+$12 = (void *(*)(void *, size_t)) 0x0
+(gdb) print global_hooks.allocate && print global_hooks.deallocate
+A syntax error in expression, near `global_hooks.deallocate'.
+(gdb) print global_hooks.allocate
+$13 = (void *(*)(size_t)) 0x555555555309 <my_malloc>
+(gdb) print global_hooks.deallocate
+$14 = (void (*)(void *)) 0x555555555364 <my_free>
+(gdb) continue
+Continuing.
+alloc_count=0, free_count=0
+
+--- 使用自定义分配器创建 ---
+
+Breakpoint 2, cJSON_New_Item (hooks=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:295
+295     {
+(gdb) fin
+Run till exit from #0  cJSON_New_Item (hooks=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:295
+[自定义malloc] size=64, ptr=0x55555555f6b0, 次数=1
+0x0000555555559780 in cJSON_CreateString (string=0x55555555b147 "world") at cJSON.c:2694
+2694        cJSON *item = cJSON_New_Item(&global_hooks);
+Value returned is $15 = (cJSON *) 0x55555555f6b0
+(gdb) con
+Ambiguous command "con": condition, continue.
+(gdb) continue
+Continuing.
+[自定义malloc] size=6, ptr=0x55555555f700, 次数=2
+创建成功: valuestring=world
+
+--- 删除节点 ---
+[自定义free] ptr=0x55555555f700, 次数=1
+[自定义free] ptr=0x55555555f6b0, 次数=2
+删除完成
+
+统计: alloc=2, free=2
+
+--- 重置为默认分配器 ---
+
+Breakpoint 1, cJSON_InitHooks (hooks=0x7fffffffd300) at cJSON.c:255
+255     {
+(gdb) continue
+Continuing.
+
+Breakpoint 2, cJSON_New_Item (hooks=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:295
+295     {
+(gdb) fin
+Run till exit from #0  cJSON_New_Item (hooks=0x7ffff7e27e93 <_IO_new_file_overflow+275>) at cJSON.c:295
+0x0000555555559780 in cJSON_CreateString (string=0x55555555b1a2 "default again") at cJSON.c:2694
+2694        cJSON *item = cJSON_New_Item(&global_hooks);
+Value returned is $16 = (cJSON *) 0x55555555f6b0
+(gdb) continue
+Continuing.
+创建成功: valuestring=default again
+删除完成
+[Inferior 1 (process 544919) exited normally]
+(gdb) q
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ 
