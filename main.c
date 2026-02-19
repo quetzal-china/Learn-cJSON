@@ -239,12 +239,25 @@ int main(void) {
 }
 #endif
 
+#if 0
 // 测试 cJSON_Parse - 嵌套对象 {"outer":{"inner":1}}
 #include "cJSON.h"
 #include <stdio.h>
 
 int main(void) {
     const char *json = "{\"outer\":{\"inner\":1}}";
+    cJSON *root = cJSON_Parse(json);
+    cJSON_Delete(root);
+    return 0;
+}
+#endif
+
+// 测试 cJSON_Parse - 数组 [1,2,3]
+#include "cJSON.h"
+#include <stdio.h>
+
+int main(void) {
+    const char *json = "[1,2,3]";
     cJSON *root = cJSON_Parse(json);
     cJSON_Delete(root);
     return 0;

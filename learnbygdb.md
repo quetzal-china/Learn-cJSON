@@ -1386,6 +1386,61 @@ $4 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, string =
 
 ---
 
+### 笔记 11 | 2026-02-19 | 追踪目标：[cJSON_Parse 数组解析]
+
+#### 【调试目标】
+- **问题**: 数组 `[1,2,3]` 如何解析？parse_array 与 parse_object 有什么区别？数组元素如何链接？
+- **入口点**: cJSON.c:1399 (cJSON_Parse函数)
+- **预期路径**: 
+  - cJSON_Parse → parse_value → parse_array → 循环解析每个元素（1,2,3）
+  - parse_array 内部会多次调用 parse_value 解析每个元素
+  - 预期观察数组元素的链表构建过程
+
+#### 【GDB 命令序列】
+```bash
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动调试
+gdb ./main
+# 设置断点
+(gdb) break cJSON_Parse
+(gdb) break parse_array
+(gdb) break parse_value
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | 待填充 | 待填充 | 待填充 |
+
+#### 【变量状态追踪】
+```c
+// 待填充 - 根据实际调试结果
+```
+
+#### 【关键发现】
+**待填充 - 根据实际调试结果**
+
+#### 【现场想法】
+- 待填充
+
+#### 【已验证的疑问】
+- [ ] parse_array 与 parse_object 的主要区别？
+- [ ] 数组元素如何链接成链表？
+- [ ] 数组是否有 depth 检查？
+
+#### 【下一步计划】
+- [ ] 观察 cJSON_Print 序列化流程
+- [ ] 测试数组嵌套对象 `[{"a":1}]` 的混合解析
+- [ ] 观察解析失败时的错误处理流程
+
+#### 【终端记录】
+详见 `scripts/11.txt`
+[11.txt](./scripts/11.txt)
+
+---
+
 ## 阶段性总结（可选）
 
 ### 已调试的函数
@@ -1397,6 +1452,7 @@ $4 = {next = 0x0, prev = 0x0, child = 0x0, type = 0, valuestring = 0x0, string =
 - [x] cJSON_InitHooks (2026-02-18)
 - [x] cJSON_Parse - 单层对象 `{"a":1}` (2026-02-18)
 - [x] cJSON_Parse - 嵌套对象 `{"outer":{"inner":1}}` (2026-02-18)
+- [x] cJSON_Parse - 数组 `[1,2,3]` (2026-02-19)
 
 ### 累积的疑问
 - 类型标志位的设计意图?
