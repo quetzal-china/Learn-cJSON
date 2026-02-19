@@ -1,0 +1,279 @@
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb) break cJSON_Print
+Breakpoint 1 at 0x316c: file cJSON.c, line 1479.
+(gdb) break cJSON_PrintBuffered
+Breakpoint 2 at 0x31c0: file cJSON.c, line 1489.
+(gdb) break print_value
+Breakpoint 3 at 0x36d2: file cJSON.c, line 1595.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+
+Breakpoint 1, cJSON_Print (item=0x55555555b004) at cJSON.c:1479
+1479    {
+(gdb) step
+1480        return (char*)print(item, true, &global_hooks);
+(gdb) list
+1475    }
+1476
+1477    /* Render a cJSON item/entity/structure to text. */
+1478    CJSON_PUBLIC(char *) cJSON_Print(const cJSON *item)
+1479    {
+1480        return (char*)print(item, true, &global_hooks);
+1481    }
+1482
+1483    CJSON_PUBLIC(char *) cJSON_PrintUnformatted(const cJSON *item)
+1484    {
+(gdb) step
+print (item=0x0, format=0, hooks=0x8) at cJSON.c:1411
+1411    {
+(gdb) list
+1406    }
+1407
+1408    #define cjson_min(a, b) (((a) < (b)) ? (a) : (b))
+1409
+1410    static unsigned char *print(const cJSON * const item, cJSON_bool format, const internal_hooks * const hooks)
+1411    {
+1412        static const size_t default_buffer_size = 256;
+1413        printbuffer buffer[1];
+1414        unsigned char *printed = NULL;
+1415
+(gdb) bt
+#0  print (item=0x0, format=0, hooks=0x8) at cJSON.c:1411
+#1  0x0000555555557194 in cJSON_Print (item=0x55555555f2a0) at cJSON.c:1480
+#2  0x0000555555555336 in main () at main.c:283
+(gdb) n
+1414        unsigned char *printed = NULL;
+(gdb) n
+1416        memset(buffer, 0, sizeof(buffer));
+(gdb) n
+1419        buffer->buffer = (unsigned char*) hooks->allocate(default_buffer_size);
+(gdb) print buffer
+$1 = {{buffer = 0x0, length = 0, offset = 0, depth = 0, noalloc = 0, format = 0, hooks = {allocate = 0x0, 
+      deallocate = 0x0, reallocate = 0x0}}}
+(gdb) n
+1420        buffer->length = default_buffer_size;
+(gdb) n
+1421        buffer->format = format;
+(gdb) n
+1422        buffer->hooks = *hooks;
+(gdb) n
+1423        if (buffer->buffer == NULL)
+(gdb)  print buffer->buffer
+$2 = (unsigned char *) 0x55555555f400 ""
+(gdb) print buffer->format
+$3 = 1
+(gdb) n
+1429        if (!print_value(item, buffer))
+(gdb) n
+
+Breakpoint 3, print_value (item=0x7ffff7e31154 <__GI___libc_malloc+116>, output_buffer=0x0) at cJSON.c:1595
+1595    {
+(gdb) list
+1590        return false;
+1591    }
+1592
+1593    /* Render a value to text. */
+1594    static cJSON_bool print_value(const cJSON * const item, printbuffer * const output_buffer)
+1595    {
+1596        unsigned char *output = NULL;
+1597
+1598        if ((item == NULL) || (output_buffer == NULL))
+1599        {
+(gdb) n
+1596        unsigned char *output = NULL;
+(gdb) n
+1598        if ((item == NULL) || (output_buffer == NULL))
+(gdb) n
+1603        switch ((item->type) & 0xFF)
+(gdb) n
+1657                return print_array(item, output_buffer);
+(gdb) step
+print_array (item=0x55555555767f <parse_value+681>, output_buffer=0x5b0000006e) at cJSON.c:1767
+1767    {
+(gdb) list
+1762        return false;
+1763    }
+1764
+1765    /* Render an array to text */
+1766    static cJSON_bool print_array(const cJSON * const item, printbuffer * const output_buffer)
+1767    {
+1768        unsigned char *output_pointer = NULL;
+1769        size_t length = 0;
+1770        cJSON *current_element = item->child;
+1771
+(gdb) n
+1768        unsigned char *output_pointer = NULL;
+(gdb) n
+1769        size_t length = 0;
+(gdb) n
+1770        cJSON *current_element = item->child;
+(gdb) n
+1772        if (output_buffer == NULL)
+(gdb) print *current_element
+$4 = {next = 0x55555555f360, prev = 0x55555555f3b0, child = 0x0, type = 8, valuestring = 0x0, valueint = 1, 
+  valuedouble = 1, string = 0x0}
+(gdb) n
+1779        output_pointer = ensure(output_buffer, 1);
+(gdb) n
+1780        if (output_pointer == NULL)
+(gdb) n
+1785        *output_pointer = '[';
+(gdb) n
+1786        output_buffer->offset++;
+(gdb) print  *output_pointer
+$5 = 91 '['
+(gdb) n
+1787        output_buffer->depth++;
+(gdb) n
+1789        while (current_element != NULL)
+(gdb) n
+1791            if (!print_value(current_element, output_buffer))
+(gdb) print *current_element
+$6 = {next = 0x55555555f360, prev = 0x55555555f3b0, child = 0x0, type = 8, valuestring = 0x0, valueint = 1, 
+  valuedouble = 1, string = 0x0}
+(gdb) step
+
+Breakpoint 3, print_value (item=0x7fffffffd170, output_buffer=0x2) at cJSON.c:1595
+1595    {
+(gdb) list
+1590        return false;
+1591    }
+1592
+1593    /* Render a value to text. */
+1594    static cJSON_bool print_value(const cJSON * const item, printbuffer * const output_buffer)
+1595    {
+1596        unsigned char *output = NULL;
+1597
+1598        if ((item == NULL) || (output_buffer == NULL))
+1599        {
+(gdb) n
+1596        unsigned char *output = NULL;
+(gdb) n
+1598        if ((item == NULL) || (output_buffer == NULL))
+(gdb) n
+1603        switch ((item->type) & 0xFF)
+(gdb) n
+1633                return print_number(item, output_buffer);
+(gdb) step
+print_number (item=0x55555555f3b0, output_buffer=0x7fffffffd140) at cJSON.c:724
+724     {
+(gdb) n
+725         unsigned char *output_pointer = NULL;
+(gdb) list
+720
+721     /* Render the number nicely from the given item into a string. */
+722     /* 将cJSON项中的数字以优美的格式打印到输出缓冲区 */
+723     static cJSON_bool print_number(const cJSON * const item, printbuffer * const output_buffer)
+724     {
+725         unsigned char *output_pointer = NULL;
+726         double d = item->valuedouble;
+727         int length = 0;
+728         size_t i = 0;
+729         unsigned char number_buffer[26] = {0}; /* temporary buffer to print the number into */
+(gdb) n
+726         double d = item->valuedouble;
+(gdb) n
+727         int length = 0;
+(gdb) n
+728         size_t i = 0;
+(gdb) n
+729         unsigned char number_buffer[26] = {0}; /* temporary buffer to print the number into */
+(gdb) n
+730         unsigned char decimal_point = get_decimal_point();
+(gdb) n
+731         double test = 0.0;
+(gdb) n
+733         if (output_buffer == NULL)
+(gdb) n
+739         if (isnan(d) || isinf(d))
+(gdb) n
+743         else if(d == (double)item->valueint)    // 整数优化, 直接输出整数
+(gdb) n
+745             length = sprintf((char*)number_buffer, "%d", item->valueint);
+(gdb) n
+763         if ((length < 0) || (length > (int)(sizeof(number_buffer) - 1)))
+(gdb) print length
+$7 = 1
+(gdb) n
+769         output_pointer = ensure(output_buffer, (size_t)length + sizeof(""));
+(gdb) n
+770         if (output_pointer == NULL)
+(gdb) n
+777         for (i = 0; i < ((size_t)length); i++)
+(gdb) n
+779             if (number_buffer[i] == decimal_point)
+(gdb) n
+785             output_pointer[i] = number_buffer[i];
+(gdb) print output_pointer[0]
+$8 = 0 '\000'
+(gdb) n
+777         for (i = 0; i < ((size_t)length); i++)
+(gdb) n
+787         output_pointer[i] = '\0';
+(gdb) n
+789         output_buffer->offset += (size_t)length;
+(gdb) n
+791         return true;
+(gdb) n
+792     }
+(gdb)  print output_pointer[0]
+$9 = 49 '1'
+(gdb)  print number_buffer[0]
+$10 = 49 '1'
+(gdb) continue
+Continuing.
+
+Breakpoint 3, print_value (item=0x7fffffffd170, output_buffer=0x6) at cJSON.c:1595
+1595    {
+(gdb) continue
+Continuing.
+
+Breakpoint 3, print_value (item=0x7fffffffd170, output_buffer=0x9) at cJSON.c:1595
+1595    {
+(gdb) continue
+Continuing.
+格式化输出:
+[1, 2, 3]
+
+
+Breakpoint 3, print_value (item=0x7ffff7e31154 <__GI___libc_malloc+116>, output_buffer=0x0) at cJSON.c:1595
+1595    {
+(gdb) continue
+Continuing.
+
+Breakpoint 3, print_value (item=0x7fffffffd170, output_buffer=0x2) at cJSON.c:1595
+1595    {
+(gdb) continue
+Continuing.
+
+Breakpoint 3, print_value (item=0x7fffffffd170, output_buffer=0x5) at cJSON.c:1595
+1595    {
+(gdb) continue
+Continuing.
+
+Breakpoint 3, print_value (item=0x7fffffffd170, output_buffer=0x7) at cJSON.c:1595
+1595    {
+(gdb) continue
+Continuing.
+非格式化输出:
+[1,2,3]
+[Inferior 1 (process 873789) exited normally]
+(gdb) q
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ 

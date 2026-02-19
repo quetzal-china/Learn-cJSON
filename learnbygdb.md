@@ -1599,42 +1599,148 @@ gdb run
 #### 【执行路径记录】
 | 步骤 | 位置 | 操作 | 观察结果 |
 |------|------|------|----------|
-| 1 | 待填充 | 待填充 | 待填充 |
+| 1 | cJSON.c:1479 | 进入 cJSON_Print | 入口函数，item 指向数组节点 |
+| 2 | cJSON.c:1480 | 调用 print | 传入 format=true（格式化输出） |
+| 3 | cJSON.c:1419 | 分配缓冲区 | buffer->buffer = 256字节，format=1 |
+| 4 | cJSON.c:1429 | 调用 print_value | 开始遍历树形结构 |
+| 5 | cJSON.c:1603 | switch 判断类型 | type=32 (Array) → 调用 print_array |
+| 6 | cJSON.c:1785 | 写入 `[` | 缓冲区第一个字符 |
+| 7 | cJSON.c:1789 | while 循环遍历 | current_element = item->child（第一个元素） |
+| 8 | cJSON.c:1791 | 调用 print_value | 打印第一个元素（递归进入） |
+| 9 | cJSON.c:1633 | 调用 print_number | type=8 (Number)，转字符串 |
+| 10 | cJSON.c:745 | sprintf 格式化 | number_buffer = "1"，length=1 |
+| 11 | cJSON.c:769 | ensure 确保空间 | 检查缓冲区容量，必要时 realloc |
+| 12 | cJSON.c:785 | 复制到缓冲区 | buffer[offset] = '1' |
+| 13 | cJSON.c:1791 | 循环继续 | current_element = next，打印元素2、3 |
+| 14 | cJSON.c:1808 | 写入 `]` | 数组结束符 |
+| 15 | - | 输出结果 | 格式化：`[1, 2, 3]`，非格式化：`[1,2,3]` |
 
 #### 【变量状态追踪】
 ```c
-// 待填充 - 根据实际调试结果
+// printbuffer 初始化
+(gdb) print *buffer
+$1 = {buffer = 0x55555555f400 "", length = 256, offset = 0, depth = 0, 
+      noalloc = 0, format = 1, hooks = {...}}
+
+// print_array 写入 '[' 后
+(gdb) print buffer->offset
+$2 = 1  // 下次写入位置
+
+// print_number 格式化数字1
+(gdb) print number_buffer[0]
+$10 = 49 '1'  // ASCII码49 = 字符'1'
+(gdb) print length
+$7 = 1  // 字符串长度
+
+// 第一个元素写入后
+(gdb) print output_pointer[0]
+$9 = 49 '1'  // 缓冲区中存储的字符
 ```
 
 #### 【关键发现】
-**待填充 - 根据实际调试结果**
+
+**观察到的现象**：
+
+1. **Print 使用迭代遍历，不是递归**：
+   - `print_array` 用 `while (current_element != NULL)` 循环
+   - 通过 `current_element = current_element->next` 移动
+   - **避免了深度嵌套导致的栈溢出**
+   - Parse 用递归（parse_value → parse_array → parse_value），Print 用迭代
+
+2. **printbuffer 动态管理**：
+   - 初始分配256字节
+   - `ensure(output_buffer, needed)` 函数检查空间
+   - 不够时自动 `realloc` 扩容
+   - `offset` 追踪当前写入位置（类似 Parse 的 offset）
+
+3. **数字转字符串流程**（print_number）：
+   - 整数优化：`sprintf(buffer, "%d", valueint)` 直接格式化
+   - 浮点数：使用 `%.15g` 格式（保留15位精度）
+   - 复制到输出缓冲区，更新 offset
+
+4. **格式化 vs 非格式化差异**：
+   - 格式化（format=1）：`[1, 2, 3]`（逗号后有空格）
+   - 非格式化（format=0）：`[1,2,3]`（紧凑输出）
+   - 差异在 print_array 的分隔符处理：`", "` vs `","`
+
+**调用栈**（打印第一个元素时）：
+```
+#0 print_number
+#1 print_value        <- 打印元素1（Number类型）
+#2 print_array        <- while循环中
+#3 print_value        <- 根节点（Array类型）
+#4 print
+#5 cJSON_Print
+#6 main
+```
+
+**Parse vs Print 对比**：
+
+| 特性 | Parse | Print |
+|------|-------|-------|
+| 方向 | 字符串 → 内存结构 | 内存结构 → 字符串 |
+| 遍历策略 | **递归下降** | **迭代遍历** |
+| 嵌套处理 | 递归调用 parse_value | while 循环 + next 指针 |
+| 关键结构 | parse_buffer (input) | printbuffer (output) |
+| 核心函数 | parse_value (分派) | print_value (分派) |
+| 缓冲区 | content + offset (读) | buffer + offset (写) |
+| 空间管理 | 只读，无需扩容 | ensure() 动态扩容 |
 
 #### 【现场想法】
-- **对比思考**：Parse 遇到嵌套会递归调用，Print 如何处理嵌套？如果用递归，深度对象会栈溢出，所以 Print 应该用迭代（栈/队列）
-- **格式化输出**：缩进和换行是在哪一层添加的？print_value 还是 print_object/array？
-- **缓冲区管理**：字符串长度不确定，如何动态扩展？realloc 还是预分配？
-- **性能考虑**：Parse 的 buffer->offset 递增，Print 是否有类似机制？
+
+**遍历策略对比**：
+- Parse 用递归是自然的：遇到 `{` 或 `[` 就递归进入，解析完返回
+- Print 为什么用迭代？因为递归会栈溢出。深度嵌套 `{"a":{"b":{"c":...}}}` 如果用递归，Print 的栈帧会不断累积
+- Print 的 while 循环很巧妙：每次只处理当前节点，用 `next` 指针推进，栈深度恒定
+- **启发**：遍历和解析是两回事。解析需要上下文（知道在对象/数组内），遍历只需要线性前进
+
+**缓冲区设计**：
+- Parse 的 parse_buffer 是**只读**的，不需要扩容（输入字符串已存在）
+- Print 的 printbuffer 需要**动态增长**，因为无法预知输出长度
+- `ensure(buffer, needed)` 的设计很通用：调用前检查，不够就 realloc，调用者无需关心细节
+- 初始256字节是经验值：大多数JSON不会太大，避免频繁realloc
+
+**数字转字符串的优化**：
+- `if (d == (double)item->valueint)` 判断是否为整数
+- 整数用 `%d`，浮点用 `%.15g`，避免不必要的 `.0` 后缀
+- 临时缓冲区26字节：够放最大的 double（科学计数法约20字符）
+
+**格式化实现**：
+- `format` 标志影响分隔符：`", "` vs `","`
+- 还影响缩进和换行（depth 控制，本例未展示）
+- cJSON_PrintUnformatted 只是 `format=false` 的包装
+
+**学习方式反思**：
+- 逐行GDB调试容易迷失细节，看不到全局
+- 改进：先看结果，理解整体流程，再验证关键点
+- 源码阅读比单步跟踪更高效（对于理解逻辑而言）
+- GDB适合验证假设，不适合探索未知
 
 #### 【Parse vs Print 对比】
 
 | 特性 | Parse | Print |
 |------|-------|-------|
 | 方向 | 字符串 → 内存结构 | 内存结构 → 字符串 |
-| 遍历策略 | 递归下降 | 预期：迭代遍历 |
-| 嵌套处理 | 递归调用 | 预期：栈模拟 |
-| 关键结构 | parse_buffer | printbuffer |
-| 核心函数 | parse_value | print_value |
+| 遍历策略 | 递归下降 | **迭代遍历（while循环）** |
+| 嵌套处理 | 递归调用 parse_value | next 指针线性推进 |
+| 关键结构 | parse_buffer (input) | printbuffer (output) |
+| 核心函数 | parse_value (分派) | print_value (分派) |
+| 缓冲区 | content + offset (读) | buffer + offset (写) |
+| 空间管理 | 只读，无需扩容 | **ensure() 动态 realloc** |
+| 性能风险 | 深度递归可能栈溢出 | 栈深度恒定，内存可能频繁realloc |
 
 #### 【已验证的疑问】
-- [ ] Print 使用递归还是迭代遍历？
-- [ ] 如何管理输出缓冲区动态增长？
-- [ ] 格式化缩进/换行在哪一层实现？
-- [ ] PrintUnformatted 与 Print 的差异点？
+- [x] Print 使用递归还是迭代遍历？-> **迭代遍历**。print_array 用 `while (current_element != NULL)` 循环，通过 `next` 指针推进，避免栈溢出
+- [x] 如何管理输出缓冲区动态增长？-> **ensure() 函数**。检查剩余空间，不够时调用 `realloc` 扩容，初始分配256字节
+- [x] 格式化缩进/换行在哪一层实现？-> **print_array/print_object 层**。通过 `format` 标志控制分隔符（`", "` vs `","`），depth 控制缩进
+- [x] PrintUnformatted 与 Print 的差异点？-> **format 参数**。Print 传 `format=true`，PrintUnformatted 传 `format=false`，其他完全相同
 
 #### 【下一步计划】
+- [x] 观察 cJSON_Print 序列化流程（将数组结构转为 JSON 字符串）
 - [ ] 调试访问器 GetObjectItem/GetArrayItem（链表查找 vs 索引访问）
 - [ ] 调试修改操作 AddItem/DeleteItem（链表插入删除）
 - [ ] 调试深拷贝 Duplicate（递归复制整个树）
+- [ ] 测试嵌套结构的序列化 `{"a":[1,2]}` 观察格式化缩进
 
 #### 【终端记录】
 详见 `scripts/12.txt`
@@ -1654,7 +1760,7 @@ gdb run
 - [x] cJSON_Parse - 单层对象 `{"a":1}` (2026-02-18)
 - [x] cJSON_Parse - 嵌套对象 `{"outer":{"inner":1}}` (2026-02-18)
 - [x] cJSON_Parse - 数组 `[1,2,3]` (2026-02-19)
-- [ ] cJSON_Print - 数组 `[1,2,3]` (2026-02-19)
+- [x] cJSON_Print - 数组 `[1,2,3]` (2026-02-19)
 
 ### 累积的疑问
 - 类型标志位的设计意图?
