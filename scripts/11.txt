@@ -1,0 +1,324 @@
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb) break cJSON_Parse
+Breakpoint 1 at 0x2e5c: file cJSON.c, line 1399.
+(gdb) break parse_array
+Breakpoint 2 at 0x3823: file cJSON.c, line 1669.
+(gdb) break parse_value
+Breakpoint 3 at 0x32f4: file cJSON.c, line 1540.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+
+Breakpoint 1, cJSON_Parse (value=0x55555555a630 <__libc_csu_init> "\363\017\036\372AWL\215=\023\067") at cJSON.c:1399
+1399    {
+(gdb) step
+1400        return cJSON_ParseWithOpts(value, 0, 0);
+(gdb) print value
+$1 = 0x55555555b004 "[1,2,3]"
+(gdb) step
+cJSON_ParseWithOpts (value=0xf0 <error: Cannot access memory at address 0xf0>, return_parse_end=0x555555554040, 
+    require_null_terminated=0) at cJSON.c:1292
+1292    {
+(gdb) bt
+#0  cJSON_ParseWithOpts (value=0xf0 <error: Cannot access memory at address 0xf0>, return_parse_end=0x555555554040, 
+    require_null_terminated=0) at cJSON.c:1292
+#1  0x0000555555556e82 in cJSON_Parse (value=0x55555555b004 "[1,2,3]") at cJSON.c:1400
+#2  0x00005555555552ac in main () at main.c:261
+(gdb) continue
+Continuing.
+
+Breakpoint 3, parse_value (item=0x7fffffffd150, input_buffer=0x34000000340) at cJSON.c:1540
+1540    {
+(gdb) print *input_buffer
+Cannot access memory at address 0x34000000340
+(gdb) list
+1535        return print_value(item, &p);
+1536    }
+1537
+1538    /* Parser core - when encountering text, process appropriately. */
+1539    static cJSON_bool parse_value(cJSON * const item, parse_buffer * const input_buffer)
+1540    {
+1541        if ((input_buffer == NULL) || (input_buffer->content == NULL))
+1542        {
+1543            return false; /* no input */
+1544        }
+(gdb) n
+1541        if ((input_buffer == NULL) || (input_buffer->content == NULL))
+(gdb) n
+1548        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "null", 4) == 0))
+(gdb) print *input_buffer
+$2 = {content = 0x55555555b004 "[1,2,3]", length = 8, offset = 0, depth = 0, hooks = {
+    allocate = 0x7ffff7e310e0 <__GI___libc_malloc>, deallocate = 0x7ffff7e316d0 <__GI___libc_free>, 
+    reallocate = 0x7ffff7e31e80 <__GI___libc_realloc>}}
+(gdb) n
+1555        if (can_read(input_buffer, 5) && (strncmp((const char*)buffer_at_offset(input_buffer), "false", 5) == 0))
+(gdb) n
+1562        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "true", 4) == 0))
+(gdb) n
+1570        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '\"'))
+(gdb) n
+1575        if (can_access_at_index(input_buffer, 0) && ((buffer_at_offset(input_buffer)[0] == '-') || ((buffer_at_offset(input_buffer)[0] >= '0') && (buffer_at_offset(input_buffer)[0] <= '9'))))
+(gdb) n
+1580        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '['))
+(gdb) n
+1582            return parse_array(item, input_buffer);
+(gdb) list
+1577            return parse_number(item, input_buffer);
+1578        }
+1579        /* array */
+1580        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '['))
+1581        {
+1582            return parse_array(item, input_buffer);
+1583        }
+1584        /* object */
+1585        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '{'))
+1586        {
+(gdb) step
+
+Breakpoint 2, parse_array (item=0x7ffff7e30ba2 <malloc_hook_ini+146>, input_buffer=0x0) at cJSON.c:1669
+1669    {
+(gdb) n
+1670        cJSON *head = NULL; /* head of the linked list */
+(gdb) n
+1671        cJSON *current_item = NULL;
+(gdb) list
+1666
+1667    /* Build an array from input text. */
+1668    static cJSON_bool parse_array(cJSON * const item, parse_buffer * const input_buffer)
+1669    {
+1670        cJSON *head = NULL; /* head of the linked list */
+1671        cJSON *current_item = NULL;
+1672
+1673        if (input_buffer->depth >= CJSON_NESTING_LIMIT)
+1674        {
+1675            return false; /* to deeply nested */
+(gdb) n
+1673        if (input_buffer->depth >= CJSON_NESTING_LIMIT)
+(gdb) n
+1677        input_buffer->depth++;
+(gdb) n
+1679        if (buffer_at_offset(input_buffer)[0] != '[')
+(gdb) print *input_buffer
+$3 = {content = 0x55555555b004 "[1,2,3]", length = 8, offset = 0, depth = 1, hooks = {
+    allocate = 0x7ffff7e310e0 <__GI___libc_malloc>, deallocate = 0x7ffff7e316d0 <__GI___libc_free>, 
+    reallocate = 0x7ffff7e31e80 <__GI___libc_realloc>}}
+(gdb) n
+1685        input_buffer->offset++;
+(gdb) n
+1686        buffer_skip_whitespace(input_buffer);
+(gdb) print input_buffer->offset
+$4 = 1
+(gdb) n
+1687        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ']'))
+(gdb) n
+1694        if (cannot_access_at_index(input_buffer, 0))
+(gdb) n
+1701        input_buffer->offset--;
+(gdb) n
+1706            cJSON *new_item = cJSON_New_Item(&(input_buffer->hooks));
+(gdb) print input_buffer->offset
+$5 = 0
+(gdb) n
+1707            if (new_item == NULL)
+(gdb) n
+1713            if (head == NULL)
+(gdb) n
+1716                current_item = head = new_item;
+(gdb) n
+1727            input_buffer->offset++;
+(gdb) n
+1728            buffer_skip_whitespace(input_buffer);
+(gdb) print input_buffer->offset
+$6 = 1
+(gdb) n
+1729            if (!parse_value(current_item, input_buffer))
+(gdb) step
+
+Breakpoint 3, parse_value (item=0x7fffffffd150, input_buffer=0x40) at cJSON.c:1540
+1540    {
+(gdb) n
+1541        if ((input_buffer == NULL) || (input_buffer->content == NULL))
+(gdb) n
+1548        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "null", 4) == 0))
+(gdb) n
+1555        if (can_read(input_buffer, 5) && (strncmp((const char*)buffer_at_offset(input_buffer), "false", 5) == 0))
+(gdb) n
+1562        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "true", 4) == 0))
+(gdb) n
+1570        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '\"'))
+(gdb) n
+1575        if (can_access_at_index(input_buffer, 0) && ((buffer_at_offset(input_buffer)[0] == '-') || ((buffer_at_offset(input_buffer)[0] >= '0') && (buffer_at_offset(input_buffer)[0] <= '9'))))
+(gdb) n
+1577            return parse_number(item, input_buffer);
+(gdb) step
+parse_number (item=0xffffffffffffffb0, input_buffer=0x40) at cJSON.c:401
+401     {
+(gdb) n
+402         double number = 0;                      // 解析得到的数字
+(gdb) n
+403         unsigned char *after_end = NULL;        // 指向数字字符串结束后的下一个字符的指针
+(gdb) continue
+Continuing.
+
+Breakpoint 3, parse_value (item=0x7fffffffd150, input_buffer=0x7fffffffd150) at cJSON.c:1540
+1540    {
+(gdb) list
+1535        return print_value(item, &p);
+1536    }
+1537
+1538    /* Parser core - when encountering text, process appropriately. */
+1539    static cJSON_bool parse_value(cJSON * const item, parse_buffer * const input_buffer)
+1540    {
+1541        if ((input_buffer == NULL) || (input_buffer->content == NULL))
+1542        {
+1543            return false; /* no input */
+1544        }
+(gdb) bt
+#0  parse_value (item=0x7fffffffd150, input_buffer=0x7fffffffd150) at cJSON.c:1540
+#1  0x00005555555579be in parse_array (item=0x55555555f2a0, input_buffer=0x7fffffffd150) at cJSON.c:1729
+#2  0x000055555555759d in parse_value (item=0x55555555f2a0, input_buffer=0x7fffffffd150) at cJSON.c:1582
+#3  0x0000555555556d5b in cJSON_ParseWithLengthOpts (value=0x55555555b004 "[1,2,3]", buffer_length=8, 
+    return_parse_end=0x0, require_null_terminated=0) at cJSON.c:1342
+#4  0x0000555555556c49 in cJSON_ParseWithOpts (value=0x55555555b004 "[1,2,3]", return_parse_end=0x0, 
+    require_null_terminated=0) at cJSON.c:1305
+#5  0x0000555555556e82 in cJSON_Parse (value=0x55555555b004 "[1,2,3]") at cJSON.c:1400
+#6  0x00005555555552ac in main () at main.c:261
+(gdb) n
+1541        if ((input_buffer == NULL) || (input_buffer->content == NULL))
+(gdb) n
+1548        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "null", 4) == 0))
+(gdb) n
+1555        if (can_read(input_buffer, 5) && (strncmp((const char*)buffer_at_offset(input_buffer), "false", 5) == 0))
+(gdb) n
+1562        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "true", 4) == 0))
+(gdb) n
+1570        if (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == '\"'))
+(gdb) n
+1575        if (can_access_at_index(input_buffer, 0) && ((buffer_at_offset(input_buffer)[0] == '-') || ((buffer_at_offset(input_buffer)[0] >= '0') && (buffer_at_offset(input_buffer)[0] <= '9'))))
+(gdb) n
+1577            return parse_number(item, input_buffer);
+(gdb) print *input_buffer
+$7 = {content = 0x55555555b004 "[1,2,3]", length = 8, offset = 3, depth = 1, hooks = {
+    allocate = 0x7ffff7e310e0 <__GI___libc_malloc>, deallocate = 0x7ffff7e316d0 <__GI___libc_free>, 
+    reallocate = 0x7ffff7e31e80 <__GI___libc_realloc>}}
+(gdb)  break cJSON.c:1735
+Breakpoint 4 at 0x5555555579d2: file cJSON.c, line 1735.
+(gdb) continue
+Continuing.
+
+Breakpoint 4, parse_array (item=0x55555555f2a0, input_buffer=0x7fffffffd150) at cJSON.c:1735
+1735        while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
+(gdb)  print input_buffer->offset
+$8 = 4
+(gdb)  print head
+$9 = (cJSON *) 0x55555555f2f0
+(gdb) print current_item
+$10 = (cJSON *) 0x55555555f360
+(gdb) n
+1706            cJSON *new_item = cJSON_New_Item(&(input_buffer->hooks));
+(gdb) list
+1701        input_buffer->offset--;
+1702        /* loop through the comma separated array elements */
+1703        do
+1704        {
+1705            /* allocate next item */
+1706            cJSON *new_item = cJSON_New_Item(&(input_buffer->hooks));
+1707            if (new_item == NULL)
+1708            {
+1709                goto fail; /* allocation failure */
+1710            }
+(gdb) n
+1707            if (new_item == NULL)
+(gdb) n
+1713            if (head == NULL)
+(gdb) n
+1721                current_item->next = new_item;
+(gdb) n
+1722                new_item->prev = current_item;
+(gdb) print current_item->next
+$11 = (struct cJSON *) 0x55555555f3b0
+(gdb) print head->next
+$12 = (struct cJSON *) 0x55555555f360
+(gdb)  print *head
+$13 = {next = 0x55555555f360, prev = 0x0, child = 0x0, type = 8, valuestring = 0x0, valueint = 1, valuedouble = 1, 
+  string = 0x0}
+(gdb) print *current_item
+$14 = {next = 0x55555555f3b0, prev = 0x55555555f2f0, child = 0x0, type = 8, valuestring = 0x0, valueint = 2, 
+  valuedouble = 2, string = 0x0}
+(gdb) n
+1723                current_item = new_item;
+(gdb) n
+1727            input_buffer->offset++;
+(gdb) n
+1728            buffer_skip_whitespace(input_buffer);
+(gdb) n
+1729            if (!parse_value(current_item, input_buffer))
+(gdb) n
+
+Breakpoint 3, parse_value (item=0x7fffffffd150, input_buffer=0x7fffffffd150) at cJSON.c:1540
+1540    {
+(gdb) n
+1541        if ((input_buffer == NULL) || (input_buffer->content == NULL))
+(gdb) n
+1548        if (can_read(input_buffer, 4) && (strncmp((const char*)buffer_at_offset(input_buffer), "null", 4) == 0))
+(gdb) n
+1555        if (can_read(input_buffer, 5) && (strncmp((const char*)buffer_at_offset(input_buffer), "false", 5) == 0))
+(gdb) continue
+Continuing.
+
+Breakpoint 4, parse_array (item=0x55555555f2a0, input_buffer=0x7fffffffd150) at cJSON.c:1735
+1735        while (can_access_at_index(input_buffer, 0) && (buffer_at_offset(input_buffer)[0] == ','));
+(gdb) print input_buffer->offset
+$15 = 6
+(gdb)  print buffer_at_offset(input_buffer)[0]
+No symbol "buffer_at_offset" in current context.
+(gdb) print head->next->next
+$16 = (struct cJSON *) 0x55555555f3b0
+(gdb)  print *head->next->next
+$17 = {next = 0x0, prev = 0x55555555f360, child = 0x0, type = 8, valuestring = 0x0, valueint = 3, valuedouble = 3, 
+  string = 0x0}
+(gdb) n
+1737        if (cannot_access_at_index(input_buffer, 0) || buffer_at_offset(input_buffer)[0] != ']')
+(gdb) n
+1742    success:
+(gdb) n
+1743        input_buffer->depth--;
+(gdb) n
+1745        if (head != NULL) {
+(gdb) print input_buffer->depth
+$18 = 0
+(gdb) print item->child
+$19 = (struct cJSON *) 0x0
+(gdb) n
+1746            head->prev = current_item;
+(gdb) n
+1749        item->type = cJSON_Array;
+(gdb) n
+1750        item->child = head;
+(gdb) n
+1752        input_buffer->offset++;
+(gdb) print *item
+$20 = {next = 0x0, prev = 0x0, child = 0x55555555f2f0, type = 32, valuestring = 0x0, valueint = 0, valuedouble = 0, 
+  string = 0x0}
+(gdb) print item->child
+$21 = (struct cJSON *) 0x55555555f2f0
+(gdb) print *item->child
+$22 = {next = 0x55555555f360, prev = 0x55555555f3b0, child = 0x0, type = 8, valuestring = 0x0, valueint = 1, 
+  valuedouble = 1, string = 0x0}
+(gdb) 

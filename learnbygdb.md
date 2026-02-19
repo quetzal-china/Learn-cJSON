@@ -1412,28 +1412,158 @@ gdb ./main
 #### 【执行路径记录】
 | 步骤 | 位置 | 操作 | 观察结果 |
 |------|------|------|----------|
-| 1 | 待填充 | 待填充 | 待填充 |
+| 1 | cJSON.c:1399 | 进入 cJSON_Parse | 入口函数，解析 `[1,2,3]` |
+| 2 | cJSON.c:1400 | 调用 cJSON_ParseWithOpts | 转发调用 |
+| 3 | cJSON.c:1292 | 进入 cJSON_ParseWithOpts | 准备解析 |
+| 4 | cJSON.c:1342 | 调用 parse_value | 解析器入口 |
+| 5 | cJSON.c:1540 | 进入 parse_value | 检测到 `[` 字符 |
+| 6 | cJSON.c:1580 | 检查 `[` 字符 | 确认是数组 |
+| 7 | cJSON.c:1582 | 调用 parse_array | 进入数组解析 |
+| 8 | cJSON.c:1669 | 进入 parse_array | depth 从 0 增加到 1 |
+| 9 | cJSON.c:1685 | 跳过 `[` | offset 从 0 增加到 1 |
+| 10 | cJSON.c:1706 | 创建第一个节点 | head = current_item = new_item |
+| 11 | cJSON.c:1729 | 调用 parse_value | 解析第一个元素 `1` |
+| 12 | cJSON.c:1577 | 进入 parse_number | 解析数字 |
+| 13 | cJSON.c:1735 | 检查逗号循环 | 发现 `,`，继续解析 |
+| 14 | cJSON.c:1744 | 创建新节点 | 为元素 `2` 分配内存 |
+| 15 | cJSON.c:1751 | 链表链接 | current_item->next = new_item |
+| 16 | cJSON.c:1729 | 调用 parse_value | 解析第二个元素 `2` |
+| 17 | cJSON.c:1735 | 检查逗号循环 | 发现 `,`，继续解析 |
+| 18 | cJSON.c:1744 | 创建新节点 | 为元素 `3` 分配内存 |
+| 19 | cJSON.c:1751 | 链表链接 | current_item->next = new_item |
+| 20 | cJSON.c:1729 | 调用 parse_value | 解析第三个元素 `3` |
+| 21 | cJSON.c:1737 | 检查 `]` | 数组结束标志 |
+| 22 | cJSON.c:1743 | depth-- | depth 从 1 减少到 0 |
+| 23 | cJSON.c:1749 | 设置类型 | item->type = cJSON_Array (32) |
+| 24 | cJSON.c:1750 | 设置 child | item->child = head |
 
 #### 【变量状态追踪】
 ```c
-// 待填充 - 根据实际调试结果
+// parse_array 初始化后
+(gdb) print *input_buffer
+$2 = {content = 0x55555555b004 "[1,2,3]", length = 8, offset = 0, depth = 1}
+
+// 创建第一个节点后
+(gdb) print head
+$9 = (cJSON *) 0x55555555f2f0
+(gdb) print current_item
+$10 = (cJSON *) 0x55555555f2f0  // 与 head 相同
+
+// 第一个元素解析完成
+(gdb) print *head
+$13 = {next = 0x55555555f360, prev = 0x0, child = 0x0, type = 8, 
+       valuestring = 0x0, valuedouble = 1, string = 0x0}
+
+// 第二个元素链接后
+(gdb) print current_item->next
+$11 = (struct cJSON *) 0x55555555f3b0
+(gdb) print *current_item
+$14 = {next = 0x55555555f3b0, prev = 0x55555555f2f0, child = 0x0, type = 8, 
+       valuestring = 0x0, valuedouble = 2, string = 0x0}
+
+// 第三个元素（最终链表）
+(gdb) print *head->next->next
+$17 = {next = 0x0, prev = 0x55555555f360, child = 0x0, type = 8, 
+       valuestring = 0x0, valuedouble = 3, string = 0x0}
+
+// 父节点（数组节点）最终状态
+(gdb) print *item
+$20 = {next = 0x0, prev = 0x0, child = 0x55555555f2f0, type = 32, 
+       valuestring = 0x0, valuedouble = 0, string = 0x0}
 ```
 
 #### 【关键发现】
-**待填充 - 根据实际调试结果**
+
+**观察到的现象**：
+
+1. **parse_array 执行流程**：
+   - depth 从 0 增加到 1，表示进入数组解析层
+   - 跳过 `[` 字符后，offset 指向第一个元素
+   - 使用 do-while 循环解析数组元素
+   - 遇到 `,` 继续循环，遇到 `]` 退出循环
+
+2. **链表构建过程**：
+   - 第一个元素：`head = current_item = new_item`（地址 0x55555555f2f0）
+   - 第二个元素：创建新节点，链接 `current_item->next = new_item`（地址 0x55555555f360）
+   - 第三个元素：继续链接（地址 0x55555555f3b0）
+   - 形成双向链表：head → 元素1 → 元素2 → 元素3
+   - 最后 `head->prev` 指向最后一个元素（循环链表设计）
+
+3. **数组元素数据结构**：
+   - 每个元素都是 cJSON_Number 类型（type=8）
+   - 值存储在 `valuedouble` 字段（1, 2, 3）
+   - 数组元素**没有键名**（string 字段为 NULL）
+   - 与对象不同，对象键值对的键名存储在 string 字段
+
+4. **父节点设置**：
+   - 数组节点类型为 cJSON_Array（type=32）
+   - `item->child` 指向链表头（第一个元素）
+   - 这样可以通过 child 遍历整个数组
+
+**调用栈**（解析第三个元素时）：
+```
+#0 parse_number
+#1 parse_value
+#2 parse_array
+#3 parse_value
+#4 cJSON_ParseWithLengthOpts
+#5 cJSON_ParseWithOpts
+#6 cJSON_Parse
+#7 main
+```
+
+**内存结构示意**：
+```
+Array 节点 (type=32)
+└── child ───────────────────────────┐
+                                     ▼
+                              ┌──────────────┐
+                              │ 元素 1       │
+                              │ valuedouble=1│
+                              │ next ────────────┐
+                              │ prev ←───────────┼───┐
+                              └──────────────┘   │   │
+                                                 ▼   │
+                                          ┌───────────┴───┐
+                                          │ 元素 2        │
+                                          │ valuedouble=2 │
+                                          │ next ────────────┐
+                                          │ prev ←───────────┼───┐
+                                          └───────────────┘   │   │
+                                                              ▼   │
+                                                       ┌──────────┴───┐
+                                                       │ 元素 3       │
+                                                       │ valuedouble=3│
+                                                       │ next = NULL  │
+                                                       │ prev ←──────────┘
+                                                       └──────────────┘
+```
 
 #### 【现场想法】
-- 待填充
+
+- **链表设计选择**：为什么要用双向链表？可能是为了支持从尾部高效插入，或者实现双向遍历。head->prev 指向最后一个元素的设计很巧妙，可以快速定位链表尾部。
+
+- **offset 回退逻辑**：parse_array 中先把 offset++ 跳过 `[`，然后在循环里 offset--，再 offset++，为什么要这样设计？猜测是为了统一循环处理逻辑，让每次循环都以相同的方式开始。
+
+- **循环链表 vs 单向链表**：head->prev 指向最后一个元素，这种循环链表设计在 cJSON_Delete 时可能有用，可以快速遍历到链表尾部。
+
+- **数组与对象的本质区别**：
+  - 对象：`{"a":1}`，每个元素有键名（string 字段）和值
+  - 数组：`[1,2,3]`，每个元素只有值，没有键名
+  - 但两者都使用 child 指针链接子节点
 
 #### 【已验证的疑问】
-- [ ] parse_array 与 parse_object 的主要区别？
-- [ ] 数组元素如何链接成链表？
-- [ ] 数组是否有 depth 检查？
+- [x] parse_array 与 parse_object 的主要区别？-> **数组元素无键名（string 字段为 NULL），直接存值；对象元素有键名存储在 string 字段，值存储在 valuedouble/valuestring/child**
+- [x] 数组元素如何链接成链表？-> **通过 next/prev 双向链接，第一个元素地址存到 parent->child，head->prev 指向最后一个元素形成循环链表**
+- [x] 数组是否有 depth 检查？-> **是，与对象相同，进入时 depth++（0→1），退出时 depth--（1→0）**
+- [x] **breakpoint at 0x地址是什么意思？** -> **这是断点的内存地址，不是函数指针。设置断点时显示的是编译期地址（相对地址），运行后显示的是实际内存地址（加上 ASLR 随机偏移）。例如 `Breakpoint 1 at 0x2e5c` 是相对地址，`Breakpoint 1 at 0x555555554e5c` 是实际地址。**
 
 #### 【下一步计划】
-- [ ] 观察 cJSON_Print 序列化流程
+- [x] 追踪数组 `[1,2,3]`，对比 parse_array 与 parse_object 的差异
+- [ ] 观察 cJSON_Print 序列化流程（将数组结构转为 JSON 字符串）
 - [ ] 测试数组嵌套对象 `[{"a":1}]` 的混合解析
 - [ ] 观察解析失败时的错误处理流程
+- [ ] 测试带转义字符的字符串解析
 
 #### 【终端记录】
 详见 `scripts/11.txt`
