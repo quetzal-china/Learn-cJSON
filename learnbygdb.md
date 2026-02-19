@@ -1571,6 +1571,77 @@ Array 节点 (type=32)
 
 ---
 
+### 笔记 12 | 2026-02-19 | 追踪目标：[cJSON_Print 序列化]
+
+#### 【调试目标】
+- **问题**: cJSON_Print 如何将内存结构 `[1,2,3]` 序列化为 JSON 字符串？与 Parse 的递归下降不同，Print 使用什么遍历策略？
+- **入口点**: cJSON.c:1478 (cJSON_Print 函数)
+- **预期路径**: 
+  - cJSON_Print → cJSON_PrintBuffered → print_value
+  - 使用 **printbuffer** 结构管理输出缓冲区
+  - 采用 **迭代遍历** 避免栈溢出（Parse 用递归，Print 用迭代）
+  - 观察格式化（缩进/换行）vs 非格式化的差异
+
+#### 【GDB 命令序列】
+```bash
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动调试
+gdb ./main
+# 设置断点
+(gdb) break cJSON_Print
+(gdb) break cJSON_PrintBuffered
+(gdb) break print_value
+(gdb) break ensure
+gdb run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | 待填充 | 待填充 | 待填充 |
+
+#### 【变量状态追踪】
+```c
+// 待填充 - 根据实际调试结果
+```
+
+#### 【关键发现】
+**待填充 - 根据实际调试结果**
+
+#### 【现场想法】
+- **对比思考**：Parse 遇到嵌套会递归调用，Print 如何处理嵌套？如果用递归，深度对象会栈溢出，所以 Print 应该用迭代（栈/队列）
+- **格式化输出**：缩进和换行是在哪一层添加的？print_value 还是 print_object/array？
+- **缓冲区管理**：字符串长度不确定，如何动态扩展？realloc 还是预分配？
+- **性能考虑**：Parse 的 buffer->offset 递增，Print 是否有类似机制？
+
+#### 【Parse vs Print 对比】
+
+| 特性 | Parse | Print |
+|------|-------|-------|
+| 方向 | 字符串 → 内存结构 | 内存结构 → 字符串 |
+| 遍历策略 | 递归下降 | 预期：迭代遍历 |
+| 嵌套处理 | 递归调用 | 预期：栈模拟 |
+| 关键结构 | parse_buffer | printbuffer |
+| 核心函数 | parse_value | print_value |
+
+#### 【已验证的疑问】
+- [ ] Print 使用递归还是迭代遍历？
+- [ ] 如何管理输出缓冲区动态增长？
+- [ ] 格式化缩进/换行在哪一层实现？
+- [ ] PrintUnformatted 与 Print 的差异点？
+
+#### 【下一步计划】
+- [ ] 调试访问器 GetObjectItem/GetArrayItem（链表查找 vs 索引访问）
+- [ ] 调试修改操作 AddItem/DeleteItem（链表插入删除）
+- [ ] 调试深拷贝 Duplicate（递归复制整个树）
+
+#### 【终端记录】
+详见 `scripts/12.txt`
+[12.txt](./scripts/12.txt)
+
+---
+
 ## 阶段性总结（可选）
 
 ### 已调试的函数
@@ -1583,6 +1654,7 @@ Array 节点 (type=32)
 - [x] cJSON_Parse - 单层对象 `{"a":1}` (2026-02-18)
 - [x] cJSON_Parse - 嵌套对象 `{"outer":{"inner":1}}` (2026-02-18)
 - [x] cJSON_Parse - 数组 `[1,2,3]` (2026-02-19)
+- [ ] cJSON_Print - 数组 `[1,2,3]` (2026-02-19)
 
 ### 累积的疑问
 - 类型标志位的设计意图?

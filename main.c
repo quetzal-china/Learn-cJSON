@@ -252,6 +252,7 @@ int main(void) {
 }
 #endif
 
+#if 0
 // 测试 cJSON_Parse - 数组 [1,2,3]
 #include "cJSON.h"
 #include <stdio.h>
@@ -260,5 +261,36 @@ int main(void) {
     const char *json = "[1,2,3]";
     cJSON *root = cJSON_Parse(json);
     cJSON_Delete(root);
+    return 0;
+}
+#endif
+
+// 测试 cJSON_Print - 数组序列化
+#include "cJSON.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void) {
+    // 创建一个数组 [1,2,3]
+    const char *json = "[1,2,3]";
+    cJSON *root = cJSON_Parse(json);
+    if (root == NULL) {
+        printf("解析失败\n");
+        return 1;
+    }
+    
+    // 序列化为字符串（格式化输出）
+    char *formatted = cJSON_Print(root);
+    printf("格式化输出:\n%s\n\n", formatted);
+    
+    // 序列化为字符串（非格式化）
+    char *unformatted = cJSON_PrintUnformatted(root);
+    printf("非格式化输出:\n%s\n", unformatted);
+    
+    // 释放资源
+    free(formatted);
+    free(unformatted);
+    cJSON_Delete(root);
+    
     return 0;
 }
