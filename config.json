@@ -1,7 +1,7 @@
 {
-    "server": {
-        "host": "localhost",
-        "port": 8080
-    },
-    "debug": true
+	"server":	{
+		"host":	"localhost",
+		"port":	9090
+	},
+	"debug":	true
 }
