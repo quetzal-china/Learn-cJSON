@@ -1685,6 +1685,7 @@ $9 = 49 '1'  // 缓冲区中存储的字符
 | 核心函数 | parse_value (分派) | print_value (分派) |
 | 缓冲区 | content + offset (读) | buffer + offset (写) |
 | 空间管理 | 只读，无需扩容 | ensure() 动态扩容 |
+| 性能风险 | 深度递归可能栈溢出 | 栈深度恒定，内存可能频繁realloc |
 
 #### 【现场想法】
 
@@ -1748,6 +1749,61 @@ $9 = 49 '1'  // 缓冲区中存储的字符
 
 ---
 
+### 笔记 13 | 2026-02-22 | 追踪目标：[cJSON_AddItem 操作]
+
+#### 【调试目标】
+- **问题**: cJSON_AddItemToArray 和 cJSON_AddItemToObject 如何工作？它们如何维护链表结构？添加引用项与普通项有何区别？
+- **入口点**: cJSON.c:2222 (cJSON_AddItemToArray), cJSON.c:2280 (cJSON_AddItemToObject)
+- **预期路径**: 
+  - 创建对象/数组 → 调用 AddItem 函数 → 内部调用 add_item_to_array/add_item_to_object
+  - 观察链表节点的链接过程（prev/next 指针更新）
+  - 对比普通添加与引用添加的差异
+
+#### 【GDB 命令序列】
+```bash
+# 编译
+gcc -g -o main main.c cJSON.c -lm
+# 启动调试
+gdb ./main
+# 设置断点
+(gdb) break cJSON_AddItemToArray
+(gdb) break cJSON_AddItemToObject
+(gdb) break add_item_to_array
+(gdb) break add_item_to_object
+(gdb) run
+```
+
+#### 【执行路径记录】
+| 步骤 | 位置 | 操作 | 观察结果 |
+|------|------|------|----------|
+| 1 | 待填充 | 待填充 | 待填充 |
+
+#### 【变量状态追踪】
+```c
+// 待填充
+```
+
+#### 【关键发现】
+待填充
+
+#### 【现场想法】
+- 待填充
+
+#### 【已验证的疑问】
+- [ ] 待验证的问题
+
+#### 【下一步计划】
+- [ ] 调试访问器 GetObjectItem/GetArrayItem（链表查找 vs 索引访问）
+- [ ] 调试修改操作 AddItem/DeleteItem（链表插入删除）
+- [ ] 调试深拷贝 Duplicate（递归复制整个树）
+- [ ] 测试嵌套结构的序列化 `{"a":[1,2]}` 观察格式化缩进
+
+#### 【终端记录】
+详见 `scripts/13.txt`
+[13.txt](./scripts/13.txt)
+
+---
+
 ## 阶段性总结（可选）
 
 ### 已调试的函数
@@ -1761,6 +1817,7 @@ $9 = 49 '1'  // 缓冲区中存储的字符
 - [x] cJSON_Parse - 嵌套对象 `{"outer":{"inner":1}}` (2026-02-18)
 - [x] cJSON_Parse - 数组 `[1,2,3]` (2026-02-19)
 - [x] cJSON_Print - 数组 `[1,2,3]` (2026-02-19)
+- [ ] cJSON_AddItemToArray/AddItemToObject (2026-02-22)
 
 ### 累积的疑问
 - 类型标志位的设计意图?

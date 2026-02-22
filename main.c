@@ -265,6 +265,7 @@ int main(void) {
 }
 #endif
 
+#if 0
 // 测试 cJSON_Print - 数组序列化
 #include "cJSON.h"
 #include <stdio.h>
@@ -290,6 +291,50 @@ int main(void) {
     // 释放资源
     free(formatted);
     free(unformatted);
+    cJSON_Delete(root);
+    
+    return 0;
+}
+#endif
+
+// 笔记13：测试 cJSON_AddItemToArray 和 cJSON_AddItemToObject
+#include "cJSON.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void) {
+    printf("=== 测试 cJSON_AddItem 操作 ===\n");
+    
+    // 创建一个空对象作为根节点
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        printf("创建根对象失败\n");
+        return 1;
+    }
+    
+    // 创建一个数组并添加到对象中
+    cJSON *arr = cJSON_CreateArray();
+    cJSON_AddItemToObject(root, "numbers", arr);
+    
+    // 向数组中添加元素
+    cJSON_AddItemToArray(arr, cJSON_CreateNumber(1));
+    cJSON_AddItemToArray(arr, cJSON_CreateNumber(2));
+    cJSON_AddItemToArray(arr, cJSON_CreateNumber(3));
+    
+    // 创建另一个对象并添加到根对象中
+    cJSON *obj = cJSON_CreateObject();
+    cJSON_AddItemToObject(root, "info", obj);
+    
+    // 向对象中添加键值对
+    cJSON_AddItemToObject(obj, "name", cJSON_CreateString("test"));
+    cJSON_AddItemToObject(obj, "active", cJSON_CreateTrue());
+    
+    // 打印结果
+    char *output = cJSON_Print(root);
+    printf("构造的JSON:\n%s\n", output);
+    free(output);
+    
+    // 清理资源
     cJSON_Delete(root);
     
     return 0;
