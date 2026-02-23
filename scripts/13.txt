@@ -1,0 +1,379 @@
+ros:foxy(1) noetic(2) ?
+1
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gcc -g -o main main.c cJSON.c -lm
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ gdb ./main 
+GNU gdb (Ubuntu 9.2-0ubuntu1~20.04.2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./main...
+(gdb) break cJSON_AddItemToArray 
+Breakpoint 1 at 0x4938: file cJSON.c, line 2223.
+(gdb) reak cJSON_AddItemToObject
+Undefined command: "reak".  Try "help".
+(gdb) break cJSON_AddItemToObject
+Breakpoint 2 at 0x4a7f: file cJSON.c, line 2281.
+(gdb) break dd_item_to_array
+Function "dd_item_to_array" not defined.
+Make breakpoint pending on future shared library load? (y or [n])  
+Please answer y or [n].
+Make breakpoint pending on future shared library load? (y or [n]) n
+(gdb) break add_item_to_array
+Breakpoint 3 at 0x488a: file cJSON.c, line 2189.
+(gdb)  break add_item_to_object
+Breakpoint 4 at 0x4973: file cJSON.c, line 2244.
+(gdb) run
+Starting program: /home/liuyuxin/Documents/GitHub/Learn-cJSON-notes/main 
+=== 测试 cJSON_AddItem 操作 ===
+
+Breakpoint 2, cJSON_AddItemToObject (object=0x55555555f700, 
+    string=0x555555555200 <_start> "\363\017\036\372\061\355I\211\321^H\211\342H\203\344\360PTL\215\005\026V", 
+    item=0x55555555982c <cJSON_CreateArray+24>) at cJSON.c:2281
+2281    {
+(gdb) list
+2276
+2277        return add_item_to_array(object, item);
+2278    }
+2279
+2280    CJSON_PUBLIC(cJSON_bool) cJSON_AddItemToObject(cJSON *object, const char *string, cJSON *item)
+2281    {
+2282        return add_item_to_object(object, string, item, &global_hooks, false);
+2283    }
+2284
+2285    /* Add an item to an object with constant string as key */
+(gdb) print *object
+$1 = {next = 0x0, prev = 0x0, child = 0x0, type = 32, valuestring = 0x0, valueint = 0, valuedouble = 0, string = 0x0}
+(gdb) print string
+$2 = 0x555555555200 <_start> "\363\017\036\372\061\355I\211\321^H\211\342H\203\344\360PTL\215\005\026V"
+(gdb) print *item
+$3 = {next = 0xf87d8348f8458948, prev = 0xc7f8458b480b7400, child = 0x8b48000000201840, type = -1010173883, 
+  valuestring = 0x10ec8348e5894855 <error: Cannot access memory at address 0x10ec8348e5894855>, 
+  valueint = -1254257336, valuedouble = -2.2754987473674109e+271, 
+  string = 0x480b7400f87d8348 <error: Cannot access memory at address 0x480b7400f87d8348>}
+(gdb) step
+2282        return add_item_to_object(object, string, item, &global_hooks, false);
+(gdb) step
+
+Breakpoint 4, add_item_to_object (object=0x555555555755 <cJSON_New_Item+63>, 
+    string=0x555555555200 <_start> "\363\017\036\372\061\355I\211\321^H\211\342H\203\344\360PTL\215\005\026V", 
+    item=0x7fffffffd140, hooks=0x55555555a7c0 <__libc_csu_init>, constant_key=32767) at cJSON.c:2244
+2244    {
+(gdb) print object->type
+$4 = 63557
+(gdb)  print string
+$5 = 0x555555555200 <_start> "\363\017\036\372\061\355I\211\321^H\211\342H\203\344\360PTL\215\005\026V"
+(gdb) print item->type
+$6 = 1431697072
+(gdb) n
+2245        char *new_key = NULL;
+(gdb) n
+2246        int new_type = cJSON_Invalid;
+(gdb) n
+2248        if ((object == NULL) || (string == NULL) || (item == NULL) || (object == item))
+(gdb) n
+2253        if (constant_key)
+(gdb) n
+2260            new_key = (char*)cJSON_strdup((const unsigned char*)string, hooks);
+(gdb) n
+2261            if (new_key == NULL)
+(gdb) n
+2266            new_type = item->type & ~cJSON_StringIsConst;
+(gdb) n
+2269        if (!(item->type & cJSON_StringIsConst) && (item->string != NULL))
+(gdb) n
+2274        item->string = new_key;
+(gdb) n
+2275        item->type = new_type;
+(gdb) n
+2277        return add_item_to_array(object, item);
+(gdb) print object->type
+$7 = 64
+(gdb)  print string
+$8 = 0x55555555b042 "numbers"
+(gdb) print *item
+$9 = {next = 0x0, prev = 0x0, child = 0x0, type = 32, valuestring = 0x0, valueint = 0, valuedouble = 0, 
+  string = 0x55555555f750 "numbers"}
+(gdb) step
+
+Breakpoint 3, add_item_to_array (array=0x55555555b042, item=0x55555555e010 <global_hooks>) at cJSON.c:2189
+2189    {
+(gdb)  print array->child
+$10 = (struct cJSON *) 0x6100656d616e0074
+(gdb) n
+2190        cJSON *child = NULL;
+(gdb)  print array->child
+$11 = (struct cJSON *) 0x0
+(gdb) n
+2192        if ((item == NULL) || (array == NULL) || (array == item))
+(gdb) print item->prev 
+$12 = (struct cJSON *) 0x0
+(gdb) print item->next 
+$13 = (struct cJSON *) 0x0
+(gdb) n
+2197        child = array->child;
+(gdb)  print array->child
+$14 = (struct cJSON *) 0x0
+(gdb) print item->prev 
+$15 = (struct cJSON *) 0x0
+(gdb) print item->next 
+$16 = (struct cJSON *) 0x0
+(gdb) n
+2201        if (child == NULL)
+(gdb) n
+2204            array->child = item;
+(gdb) n
+2205            item->prev = item;
+(gdb)  print array->child
+$17 = (struct cJSON *) 0x55555555f700
+(gdb) print item->prev 
+$18 = (struct cJSON *) 0x0
+(gdb) print item->next 
+$19 = (struct cJSON *) 0x0
+(gdb) n
+2206            item->next = NULL;
+(gdb) n
+2218        return true;
+(gdb) n
+2219    }
+(gdb) n
+add_item_to_object (object=0x55555555f6b0, string=0x55555555b042 "numbers", item=0x55555555f700, 
+    hooks=0x55555555e010 <global_hooks>, constant_key=0) at cJSON.c:2278
+2278    }
+(gdb) n
+cJSON_AddItemToObject (object=0x55555555f6b0, string=0x55555555b042 "numbers", item=0x55555555f700) at cJSON.c:2283
+2283    }
+(gdb) n
+main () at main.c:320
+320         cJSON_AddItemToArray(arr, cJSON_CreateNumber(1));
+(gdb) n
+
+Breakpoint 1, cJSON_AddItemToArray (array=0x55555555f770, item=0x55555555b042) at cJSON.c:2223
+2223    {
+(gdb) n
+2224        return add_item_to_array(array, item);
+(gdb) n
+
+Breakpoint 3, add_item_to_array (array=0x55555555f770, item=0x2000000023) at cJSON.c:2189
+2189    {
+(gdb) n
+2190        cJSON *child = NULL;
+(gdb) n
+2192        if ((item == NULL) || (array == NULL) || (array == item))
+(gdb) n
+2197        child = array->child;
+(gdb) n
+2201        if (child == NULL)
+(gdb) n
+2204            array->child = item;
+(gdb) n
+2205            item->prev = item;
+(gdb) print array->child
+$20 = (struct cJSON *) 0x55555555f770
+(gdb) print *item
+$21 = {next = 0x0, prev = 0x0, child = 0x0, type = 8, valuestring = 0x0, valueint = 1, valuedouble = 1, string = 0x0}
+(gdb) n
+2206            item->next = NULL;
+(gdb) print item->prev
+$22 = (struct cJSON *) 0x55555555f770
+(gdb) print item->next
+$23 = (struct cJSON *) 0x0
+(gdb) n
+2218        return true;
+(gdb) n
+2219    }
+(gdb) n
+cJSON_AddItemToArray (array=0x55555555f700, item=0x55555555f770) at cJSON.c:2225
+2225    }
+(gdb) n
+main () at main.c:321
+321         cJSON_AddItemToArray(arr, cJSON_CreateNumber(2));
+(gdb) n
+
+Breakpoint 1, cJSON_AddItemToArray (array=0x55555555f7c0, item=0x55555555f770) at cJSON.c:2223
+2223    {
+(gdb) n
+2224        return add_item_to_array(array, item);
+(gdb) n
+
+Breakpoint 3, add_item_to_array (array=0x55555555f7c0, item=0x55555555f770) at cJSON.c:2189
+2189    {
+(gdb) n
+2190        cJSON *child = NULL;
+(gdb) n
+2192        if ((item == NULL) || (array == NULL) || (array == item))
+(gdb) n
+2197        child = array->child;
+(gdb) n
+2201        if (child == NULL)
+(gdb) print array->child 
+$24 = (struct cJSON *) 0x55555555f770
+(gdb) list
+2196
+2197        child = array->child;
+2198        /*
+2199         * To find the last item in array quickly, we use prev in array
+2200         */
+2201        if (child == NULL)
+2202        {
+2203            /* list is empty, start new one */
+2204            array->child = item;
+2205            item->prev = item;
+(gdb) n
+2211            if (child->prev)
+(gdb) n
+2213                suffix_object(child->prev, item);
+(gdb) step
+suffix_object (prev=0x555555555755 <cJSON_New_Item+63>, item=0x555555555200 <_start>) at cJSON.c:2161
+2161    {
+(gdb) list
+2156        return cJSON_GetObjectItem(object, string) ? 1 : 0;
+2157    }
+2158
+2159    /* Utility for array list handling. */
+2160    static void suffix_object(cJSON *prev, cJSON *item)
+2161    {
+2162        prev->next = item;
+2163        item->prev = prev;
+2164    }
+2165
+(gdb) n
+2162        prev->next = item;
+(gdb) n
+2163        item->prev = prev;
+(gdb) n
+2164    }
+(gdb) n
+add_item_to_array (array=0x55555555f700, item=0x55555555f7c0) at cJSON.c:2214
+2214                array->child->prev = item;
+(gdb) n
+2218        return true;
+(gdb) print prev
+No symbol "prev" in current context.
+(gdb) print item
+$25 = (cJSON *) 0x55555555f7c0
+(gdb) print prev->next
+No symbol "prev" in current context.
+(gdb) print item->prev
+$26 = (struct cJSON *) 0x55555555f770
+(gdb) n
+2219    }
+(gdb) n
+cJSON_AddItemToArray (array=0x55555555f700, item=0x55555555f7c0) at cJSON.c:2225
+2225    }
+(gdb) n
+main () at main.c:322
+322         cJSON_AddItemToArray(arr, cJSON_CreateNumber(3));
+(gdb) n
+
+Breakpoint 1, cJSON_AddItemToArray (array=0x55555555f810, item=0x55555555f7c0) at cJSON.c:2223
+2223    {
+(gdb) n
+2224        return add_item_to_array(array, item);
+(gdb) continue
+Continuing.
+
+Breakpoint 3, add_item_to_array (array=0x55555555f810, item=0x55555555f7c0) at cJSON.c:2189
+2189    {
+(gdb) continue
+Continuing.
+
+Breakpoint 2, cJSON_AddItemToObject (object=0x55555555f860, string=0x55555555f810 "", 
+    item=0x555555559860 <cJSON_CreateObject+24>) at cJSON.c:2281
+2281    {
+(gdb) n
+2282        return add_item_to_object(object, string, item, &global_hooks, false);
+(gdb) n
+
+Breakpoint 4, add_item_to_object (object=0x555555555755 <cJSON_New_Item+63>, 
+    string=0x555555555200 <_start> "\363\017\036\372\061\355I\211\321^H\211\342H\203\344\360PTL\215\005\026V", 
+    item=0x7fffffffd140, hooks=0x55555555a7c0 <__libc_csu_init>, constant_key=32767) at cJSON.c:2244
+2244    {
+(gdb) continue
+Continuing.
+
+Breakpoint 3, add_item_to_array (array=0x55555555b04a, item=0x55555555e010 <global_hooks>) at cJSON.c:2189
+2189    {
+(gdb) n
+2190        cJSON *child = NULL;
+(gdb) n
+2192        if ((item == NULL) || (array == NULL) || (array == item))
+(gdb) n
+2197        child = array->child;
+(gdb) n
+2201        if (child == NULL)
+(gdb) n
+2211            if (child->prev)
+(gdb) n
+2213                suffix_object(child->prev, item);
+(gdb) n
+2214                array->child->prev = item;
+(gdb) n
+2218        return true;
+(gdb) n
+2219    }
+(gdb) n
+add_item_to_object (object=0x55555555f6b0, string=0x55555555b04a "info", item=0x55555555f860, 
+    hooks=0x55555555e010 <global_hooks>, constant_key=0) at cJSON.c:2278
+2278    }
+(gdb) continue
+Continuing.
+
+Breakpoint 2, cJSON_AddItemToObject (object=0x55555555f8d0, string=0x55555555b04a "info", item=0x55555555b04f)
+    at cJSON.c:2281
+2281    {
+(gdb) cin
+Undefined command: "cin".  Try "help".
+(gdb) continue
+Continuing.
+
+Breakpoint 4, add_item_to_object (object=0x55555555b04f, 
+    string=0x55555555e010 <global_hooks> "\340\020\343\367\377\177", item=0x55555555563b <cJSON_strdup+127>, 
+    hooks=0x555555555200 <_start>, constant_key=32767) at cJSON.c:2244
+2244    {
+(gdb) continue
+Continuing.
+
+Breakpoint 3, add_item_to_array (array=0x55555555b054, item=0x55555555e010 <global_hooks>) at cJSON.c:2189
+2189    {
+(gdb) continue
+Continuing.
+
+Breakpoint 2, cJSON_AddItemToObject (object=0x55555555f960, string=0x55555555b054 "name", 
+    item=0x555555559526 <cJSON_CreateTrue+24>) at cJSON.c:2281
+2281    {
+(gdb) continue
+Continuing.
+
+Breakpoint 4, add_item_to_object (object=0x555555555755 <cJSON_New_Item+63>, 
+    string=0x555555555200 <_start> "\363\017\036\372\061\355I\211\321^H\211\342H\203\344\360PTL\215\005\026V", 
+    item=0x7fffffffd140, hooks=0x55555555a7c0 <__libc_csu_init>, constant_key=32767) at cJSON.c:2244
+2244    {
+(gdb) continue
+Continuing.
+
+Breakpoint 3, add_item_to_array (array=0x55555555b059, item=0x55555555e010 <global_hooks>) at cJSON.c:2189
+2189    {
+(gdb) continue
+Continuing.
+构造的JSON:
+{
+        "numbers":      [1, 2, 3],
+        "info": {
+                "name": "test",
+                "active":       true
+        }
+}
+[Inferior 1 (process 1849003) exited normally]
+(gdb) q
+liuyuxin@ubuntu:~/Documents/GitHub/Learn-cJSON-notes$ 

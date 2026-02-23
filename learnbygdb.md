@@ -1749,15 +1749,15 @@ $9 = 49 '1'  // 缓冲区中存储的字符
 
 ---
 
-### 笔记 13 | 2026-02-22 | 追踪目标：[cJSON_AddItem 操作]
+### 笔记 13 | 2026-02-23 | 追踪目标：[cJSON_AddItem 操作]
 
 #### 【调试目标】
-- **问题**: cJSON_AddItemToArray 和 cJSON_AddItemToObject 如何工作？它们如何维护链表结构？添加引用项与普通项有何区别？
-- **入口点**: cJSON.c:2222 (cJSON_AddItemToArray), cJSON.c:2280 (cJSON_AddItemToObject)
+- **问题**: cJSON_AddItemToArray 和 cJSON_AddItemToObject 如何工作？链表如何构建？循环链表的设计目的是什么？
+- **入口点**: cJSON.c:2280 (cJSON_AddItemToObject), cJSON.c:2222 (cJSON_AddItemToArray)
 - **预期路径**: 
-  - 创建对象/数组 → 调用 AddItem 函数 → 内部调用 add_item_to_array/add_item_to_object
-  - 观察链表节点的链接过程（prev/next 指针更新）
-  - 对比普通添加与引用添加的差异
+  - 创建对象/数组 → 调用 AddItem 函数 → 内部调用 add_item_to_object/add_item_to_array
+  - 空链表：`item->prev = item` 自循环初始化
+  - 非空链表：`suffix_object()` 链接 + `array->child->prev = item` 更新循环指针
 
 #### 【GDB 命令序列】
 ```bash
@@ -1776,26 +1776,138 @@ gdb ./main
 #### 【执行路径记录】
 | 步骤 | 位置 | 操作 | 观察结果 |
 |------|------|------|----------|
-| 1 | 待填充 | 待填充 | 待填充 |
+| 1 | cJSON.c:2281 | 进入 cJSON_AddItemToObject | 添加 "numbers" 数组到根对象 |
+| 2 | cJSON.c:2282 | 调用 add_item_to_object | constant_key=false |
+| 3 | cJSON.c:2260 | cJSON_strdup 复制键名 | new_key = "numbers" |
+| 4 | cJSON.c:2274 | 设置 item->string | item->string = "numbers" |
+| 5 | cJSON.c:2277 | 调用 add_item_to_array | 链接节点到链表 |
+| 6 | cJSON.c:2197 | child = array->child | child = NULL (空对象) |
+| 7 | cJSON.c:2201 | if (child == NULL) | 条件为 true，进入初始化分支 |
+| 8 | cJSON.c:2204 | array->child = item | 对象 child 指向第一个元素 |
+| 9 | cJSON.c:2205 | item->prev = item | **自循环**：prev 指向自己 |
+| 10 | cJSON.c:2206 | item->next = NULL | next 设为 NULL |
+| 11 | cJSON.c:2211 | 添加第二个元素 | if (child->prev) 条件为真 |
+| 12 | cJSON.c:2213 | 调用 suffix_object | 链接新元素到链表尾部 |
+| 13 | cJSON.c:2162 | prev->next = item | 第一个元素 next 指向第二个 |
+| 14 | cJSON.c:2163 | item->prev = prev | 第二个元素 prev 指向第一个 |
+| 15 | cJSON.c:2214 | array->child->prev = item | **更新循环指针**指向新尾部 |
 
 #### 【变量状态追踪】
 ```c
-// 待填充
+// 步骤 6：空对象，child 为 NULL
+(gdb) print array->child
+$10 = (struct cJSON *) 0x0
+
+// 步骤 8-10：第一个元素添加后（空对象初始化）
+(gdb) print array->child
+$17 = (struct cJSON *) 0x55555555f700
+(gdb) print item->prev
+$18 = (struct cJSON *) 0x0  // 注意：执行 next 后才更新
+(gdb) print item->next
+$19 = (struct cJSON *) 0x0
+
+// 步骤 10 执行后：自循环建立
+(gdb) print item->prev
+$22 = (struct cJSON *) 0x55555555f770  // 指向自己！
+(gdb) print item->next
+$23 = (struct cJSON *) 0x0
+
+// 第一个数组元素（数字 1）
+(gdb) print *item
+$21 = {next = 0x0, prev = 0x0, child = 0x0, type = 8, valuestring = 0x0, 
+       valueint = 1, valuedouble = 1, string = 0x0}
+
+// 步骤 13-14：suffix_object 链接第二个元素
+(gdb) n  # 执行 suffix_object 后
+(gdb) print item->prev
+$26 = (struct cJSON *) 0x55555555f770  // 第二个元素 prev 指向第一个
+
+// 步骤 15：更新循环指针后
+(gdb) print array->child->prev
+// 指向链表尾部（最后一个元素）
 ```
 
 #### 【关键发现】
-待填充
+
+**观察到的现象**：
+
+1. **空链表初始化（自循环设计）**：
+   - 第一个元素：`item->prev = item`（自己指向自己）
+   - `item->next = NULL`
+   - `array->child = item`（头指针指向第一个元素）
+   - 这形成了**循环链表**的基础结构
+
+2. **非空链表追加（O(1) 尾部插入）**：
+   - `child->prev` 始终指向链表尾部（循环设计的关键）
+   - 调用 `suffix_object(child->prev, item)` 链接新元素
+   - 更新 `array->child->prev = item` 保持循环
+
+3. **suffix_object 函数实现**（cJSON.c:2160-2164）：
+   ```c
+   static void suffix_object(cJSON *prev, cJSON *item)
+   {
+       prev->next = item;  // 前一个元素的 next 指向新元素
+       item->prev = prev;  // 新元素的 prev 指向前一个
+   }
+   ```
+   这是双向链表链接的**标准操作**，仅两行代码。
+
+4. **对象添加键值对的流程**：
+   - `cJSON_strdup` 复制键名（分配新内存）
+   - `item->string = new_key`
+   - `item->type = item->type & ~cJSON_StringIsConst`
+   - 调用 `add_item_to_array` 链接到对象链表
+
+5. **GDB 调试中的现象**：
+   - 刚进入 static 函数时，参数显示异常（地址错乱）
+   - 执行几步（next）后，参数显示正确值
+   - 这是调试符号问题，不影响实际执行
+
+**调用栈**（添加第二个数组元素时）：
+```
+#0 add_item_to_array
+#1 cJSON_AddItemToArray
+#2 add_item_to_object
+#3 cJSON_AddItemToObject
+#4 main
+```
+
+**内存结构示意**（添加 [1,2,3] 后）：
+```
+数组节点 (type=32)
+└── child ──→ 元素 1 (type=8, valuedouble=1)
+               ├── next ──→ 元素 2 (type=8, valuedouble=2)
+               │             ├── next ──→ 元素 3 (type=8, valuedouble=3)
+               │             │             └── next = NULL
+               │             └── prev ←─── 元素 3 (循环)
+               └── prev ←───────────────────┘ (循环)
+```
 
 #### 【现场想法】
-- 待填充
+
+- **自循环设计的目的**：`item->prev = item` 使 `child->prev` 始终指向链表尾部，追加元素时可直接使用 `suffix_object(child->prev, new_item)`，无需遍历链表查找尾部。
+
+- **循环链表 vs 单向链表**：单向链表需要额外维护 `tail` 指针或遍历到 `NULL` 才能定位尾部。循环链表利用已有的 `prev` 指针实现相同功能，避免额外指针开销。
+
+- **键名复制的必要性**：对象的键名由对象拥有所有权，需要独立分配内存。数组元素无键名（`string` 字段为 `NULL`），不需要此步骤。
+
+- **GDB 调试注意事项**：在 `suffix_object` 处设置断点可观察链表链接过程。刚进入 static 函数时参数可能显示异常，执行一步（next）后恢复正常，这是调试符号解析问题。
 
 #### 【已验证的疑问】
-- [ ] 待验证的问题
+
+- [x] 空数组/对象添加第一个元素时链表如何初始化？→ **`item->prev = item` 自循环，`item->next = NULL`**
+- [x] 追加元素时如何找到链表尾部？→ **`array->child->prev` 直接指向尾部，O(1) 定位**
+- [x] suffix_object 的具体实现？→ **`prev->next = item; item->prev = prev;` 双向链接**
+- [x] 对象添加键值对时键名如何处理？→ **`cJSON_strdup` 复制，存储到 `item->string`**
+- [x] 数组元素和对象元素的区别？→ **数组元素无 string 字段，对象元素 string 存储键名**
+- [x] GDB 刚进入函数时参数显示异常？→ **调试符号问题，执行一步后恢复正常**
 
 #### 【下一步计划】
+
+- [x] 调试修改操作 AddItem/DeleteItem（链表插入删除）
 - [ ] 调试访问器 GetObjectItem/GetArrayItem（链表查找 vs 索引访问）
-- [ ] 调试修改操作 AddItem/DeleteItem（链表插入删除）
 - [ ] 调试深拷贝 Duplicate（递归复制整个树）
+- [ ] 调试 DeleteItem 操作（链表删除节点）
 - [ ] 测试嵌套结构的序列化 `{"a":[1,2]}` 观察格式化缩进
 
 #### 【终端记录】
@@ -1817,7 +1929,7 @@ gdb ./main
 - [x] cJSON_Parse - 嵌套对象 `{"outer":{"inner":1}}` (2026-02-18)
 - [x] cJSON_Parse - 数组 `[1,2,3]` (2026-02-19)
 - [x] cJSON_Print - 数组 `[1,2,3]` (2026-02-19)
-- [ ] cJSON_AddItemToArray/AddItemToObject (2026-02-22)
+- [x] cJSON_AddItemToArray/AddItemToObject (2026-02-23)
 
 ### 累积的疑问
 - 类型标志位的设计意图?
