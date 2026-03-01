@@ -289,8 +289,26 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
     }
 }
 
+/* ===========================================================================
+ * 内部构造函数
+ * ===========================================================================
+ * @brief 分配并初始化一个新的 cJSON 节点
+ * @param hooks 内存管理钩子（实际调用时为 global_hooks）
+ * @return 新分配的节点，失败返回 NULL
+ * 
+ * 初始化细节:
+ * 1. 分配 sizeof(cJSON) 字节内存
+ * 2. memset 清零（所有指针=NULL, type=0, 数值=0）
+ * 3. 返回未设置类型的节点（调用者负责设置 type）
+ * 
+ * 调用者:
+ * - 所有 cJSON_Create* 函数
+ * - parse_array/parse_object 创建子节点
+ * - create_reference 创建引用节点
+ * ===========================================================================
+ */
 /* Internal constructor. */
-/* 构建一个新的cJSON项, 使用传入的内存管理钩子(实际调用时为global_hooks) */
+/* 构建一个新的cJSON项, 使用传入的内存管理钩子 (实际调用时为 global_hooks) */
 static cJSON *cJSON_New_Item(const internal_hooks * const hooks)
 {
     cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));
@@ -302,6 +320,31 @@ static cJSON *cJSON_New_Item(const internal_hooks * const hooks)
     return node;
 }
 
+/* ===========================================================================
+ * 递归删除 cJSON 节点
+ * ===========================================================================
+ * @brief 递归删除 cJSON 节点及其所有子节点
+ * @param item 要删除的节点
+ * 
+ * 删除算法（后序遍历）:
+ * 1. 保存 next 指针（迭代用）
+ * 2. 若 child 存在且非引用 → 递归删除 child
+ * 3. 若 valuestring 存在且非引用 → 释放
+ * 4. 若 string 存在且非常量 → 释放
+ * 5. 释放节点本身
+ * 6. 移动到 next，重复直到链表结束
+ * 
+ * 引用检查:
+ * - cJSON_IsReference: 不释放 child 和 valuestring
+ * - cJSON_StringIsConst: 不释放 string
+ * 
+ * 示例内存布局:
+ * {"a":1,"b":[2,3]}
+ * 
+ * 删除顺序:
+ * 1 → "a" → "b"的子节点 [2,3] → "b" → 根节点
+ * ===========================================================================
+ */
 /* Delete a cJSON structure. */
 CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
 {
@@ -1223,10 +1266,18 @@ static cJSON_bool print_string(const cJSON * const item, printbuffer * const p)
     return print_string_ptr((unsigned char*)item->valuestring, p);
 }
 
-/* Predeclare these prototypes. */
-/* 提前声明函数原型 */
-/* prase解析类型的函数是cJSON * const item */
-/* print打印类型的函数是const cJSON * const item */
+/* ===========================================================================
+ * 函数原型提前声明
+ * ===========================================================================
+ * 声明顺序规则:
+ * 1. parse 系列：解析函数，参数为 cJSON * const item（需要修改）
+ * 2. print 系列：打印函数，参数为 const cJSON * const item（只读）
+ * 
+ * 递归调用关系:
+ * parse_value → parse_object/parse_array → parse_value（递归）
+ * print_value → print_object/print_array → print_value（递归）
+ * ===========================================================================
+ */
 static cJSON_bool parse_value(cJSON * const item, parse_buffer * const input_buffer);
 static cJSON_bool print_value(const cJSON * const item, printbuffer * const output_buffer);
 static cJSON_bool parse_array(cJSON * const item, parse_buffer * const input_buffer);
@@ -1535,6 +1586,42 @@ CJSON_PUBLIC(cJSON_bool) cJSON_PrintPreallocated(cJSON *item, char *buffer, cons
     return print_value(item, &p);
 }
 
+/* ===========================================================================
+ * 递归下降解析核心 - parse_value
+ * ===========================================================================
+ * @brief 根据输入字符判断 JSON 值类型，并调用相应的解析函数
+ * @param item 要填充的 cJSON 节点（已分配，未初始化）
+ * @param input_buffer 解析缓冲区（offset 指向当前解析位置）
+ * @return true=解析成功，false=解析失败（设置 global_error）
+ * 
+ * 解析流程（递归下降）:
+ * 1. 检查输入有效性
+ * 2. 根据首字符判断类型:
+ *    - 'n' → null
+ *    - 'f' → false
+ *    - 't' → true
+ *    - '"'  → string（调用 parse_string）
+ *    - '-' 或数字 → number（调用 parse_number）
+ *    - '[' → array（调用 parse_array，递归）
+ *    - '{' → object（调用 parse_object，递归）
+ * 3. 更新 buffer->offset
+ * 4. 返回结果
+ * 
+ * 递归调用关系:
+ * parse_value
+ *   ├─→ parse_string
+ *   ├─→ parse_number
+ *   ├─→ parse_array ──→ parse_value（递归）
+ *   └─→ parse_object ──→ parse_value（递归）
+ * 
+ * 示例解析路径:
+ * {"a":[1,2]}
+ * parse_value → parse_object
+ *                ├─ parse_string (key "a")
+ *                └─ parse_value → parse_array
+ *                                  └─ parse_value × 2 (numbers)
+ * ===========================================================================
+ */
 /* Parser core - when encountering text, process appropriately. */
 static cJSON_bool parse_value(cJSON * const item, parse_buffer * const input_buffer)
 {
@@ -1590,6 +1677,35 @@ static cJSON_bool parse_value(cJSON * const item, parse_buffer * const input_buf
     return false;
 }
 
+/* ===========================================================================
+ * 递归下降打印核心 - print_value
+ * ===========================================================================
+ * @brief 根据 type 字段将 cJSON 值序列化为文本
+ * @param item 要打印的 cJSON 节点（只读）
+ * @param output_buffer 输出缓冲区
+ * @return true=成功，false=失败
+ * 
+ * 打印流程:
+ * 通过 (item->type) & 0xFF 获取基本类型（忽略标志位）
+ * 
+ * 类型处理:
+ * - cJSON_NULL    → "null"
+ * - cJSON_False   → "false"
+ * - cJSON_True    → "true"
+ * - cJSON_Number  → print_number（格式化数字）
+ * - cJSON_Raw     → 直接复制 valuestring
+ * - cJSON_String  → print_string（处理转义）
+ * - cJSON_Array   → print_array（递归）
+ * - cJSON_Object  → print_object（递归）
+ * 
+ * 递归调用关系:
+ * print_value
+ *   ├─→ print_number
+ *   ├─→ print_string
+ *   ├─→ print_array ──→ print_value（递归）
+ *   └─→ print_object ──→ print_value（递归）
+ * ===========================================================================
+ */
 /* Render a value to text. */
 static cJSON_bool print_value(const cJSON * const item, printbuffer * const output_buffer)
 {
@@ -1664,6 +1780,40 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
     }
 }
 
+/* ===========================================================================
+ * 数组解析 - parse_array
+ * ===========================================================================
+ * @brief 解析 JSON 数组，构建双向链表
+ * @param item 要填充的 cJSON 节点（已分配）
+ * @param input_buffer 解析缓冲区（offset 指向'['字符）
+ * @return true=成功，false=失败
+ * 
+ * 数组结构:
+ * [1, "two", null, {"key":"value"}]
+ * 
+ * 解析步骤:
+ * 1. 深度检查：depth >= CJSON_NESTING_LIMIT → 失败
+ * 2. 验证'['并跳过
+ * 3. 跳过空白，检查空数组 ]
+ * 4. do-while 循环解析元素:
+ *    a. 分配新节点
+ *    b. 链接到链表末尾（使用 prev 优化）
+ *    c. 递归调用 parse_value 解析值
+ *    d. 跳过空白，检查逗号
+ * 5. 验证']'
+ * 6. 设置 item->type = cJSON_Array
+ * 7. 设置 item->child = head
+ * 
+ * 链表构建细节:
+ * head → elem1 ↔ elem2 ↔ elem3
+ *            ↑
+ *       current_item（总是指向末尾）
+ * 
+ * 失败处理:
+ * - 释放已构建的链表（cJSON_Delete(head)）
+ * - 返回 false
+ * ===========================================================================
+ */
 /* Build an array from input text. */
 static cJSON_bool parse_array(cJSON * const item, parse_buffer * const input_buffer)
 {
@@ -1762,6 +1912,35 @@ fail:
     return false;
 }
 
+/* ===========================================================================
+ * 数组打印 - print_array
+ * ===========================================================================
+ * @brief 将 cJSON 数组序列化为文本
+ * @param item 数组节点（只读）
+ * @param output_buffer 输出缓冲区
+ * @return true=成功，false=失败
+ * 
+ * 输出格式:
+ * 格式化模式：[elem1, elem2, elem3]
+ * 紧凑模式：[elem1,elem2,elem3]
+ * 
+ * 打印步骤:
+ * 1. 输出'['
+ * 2. 遍历子节点链表:
+ *    a. print_value 递归打印元素
+ *    b. update_offset 更新写入位置
+ *    c. 若有下一个元素，输出逗号
+ * 3. 输出']'
+ * 4. depth--（恢复嵌套深度）
+ * 
+ * 格式化细节:
+ * - output_buffer->format = true:
+ *   - 逗号后加空格
+ *   - 每个元素后换行
+ * - output_buffer->format = false:
+ *   - 最小化输出，无多余空白
+ * ===========================================================================
+ */
 /* Render an array to text */
 static cJSON_bool print_array(const cJSON * const item, printbuffer * const output_buffer)
 {
@@ -1824,6 +2003,45 @@ static cJSON_bool print_array(const cJSON * const item, printbuffer * const outp
     return true;
 }
 
+/* ===========================================================================
+ * 对象解析 - parse_object
+ * ===========================================================================
+ * @brief 解析 JSON 对象，构建键值对链表
+ * @param item 要填充的 cJSON 节点（已分配）
+ * @param input_buffer 解析缓冲区（offset 指向'{'字符）
+ * @return true=成功，false=失败
+ * 
+ * 对象结构:
+ * {"name":"John","age":30}
+ * 
+ * 解析步骤:
+ * 1. 深度检查：depth >= CJSON_NESTING_LIMIT → 失败
+ * 2. 验证'{'并跳过
+ * 3. 跳过空白，检查空对象 }
+ * 4. do-while 循环解析键值对:
+ *    a. 分配新节点
+ *    b. 链接到链表末尾
+ *    c. parse_string 解析键名 → 存入 valuestring
+ *    d. **关键步骤**: 交换 string 和 valuestring
+ *       current_item->string = current_item->valuestring
+ *       current_item->valuestring = NULL
+ *    e. 验证':'分隔符
+ *    f. parse_value 解析值
+ *    g. 跳过空白，检查逗号
+ * 5. 验证'}'
+ * 6. 设置 item->type = cJSON_Object
+ * 7. 设置 item->child = head
+ * 
+ * key-value 交换设计:
+ * parse_string 原本解析值，但对象中先遇到键名
+ * 解决：先存到 valuestring，再交换到 string
+ * 这样 parse_string 无需区分键和值
+ * 
+ * 失败处理:
+ * - 释放已构建的链表（cJSON_Delete(head)）
+ * - 返回 false
+ * ===========================================================================
+ */
 /* Build an object from the text. */
 static cJSON_bool parse_object(cJSON * const item, parse_buffer * const input_buffer)
 {
@@ -1942,6 +2160,41 @@ fail:
     return false;
 }
 
+/* ===========================================================================
+ * 对象打印 - print_object
+ * ===========================================================================
+ * @brief 将 cJSON 对象序列化为文本
+ * @param item 对象节点（只读）
+ * @param output_buffer 输出缓冲区
+ * @return true=成功，false=失败
+ * 
+ * 输出格式:
+ * 格式化模式:
+ * {
+ *     "key1": "value1",
+ *     "key2": 30
+ * }
+ * 
+ * 紧凑模式:
+ * {"key1":"value1","key2":30}
+ * 
+ * 打印步骤:
+ * 1. 输出'{'
+ * 2. 遍历子节点链表:
+ *    a. 若格式化模式，输出缩进（depth 个\t）
+ *    b. print_string_ptr 打印键名（带引号）
+ *    c. 输出':'分隔符
+ *    d. print_value 递归打印值
+ *    e. 若有下一个元素，输出逗号
+ * 3. 输出'}'
+ * 4. depth--（恢复嵌套深度）
+ * 
+ * 格式化细节:
+ * - 每层嵌套增加 output_buffer->depth
+ * - 缩进使用制表符\t
+ * - 键名总是带双引号
+ * ===========================================================================
+ */
 /* Render an object to text. */
 static cJSON_bool print_object(const cJSON * const item, printbuffer * const output_buffer)
 {
