@@ -256,6 +256,50 @@ static void create_objects(void)
     cJSON_Delete(root);
 }
 
+/* Test cJSON_PrintFormatted function */
+static void test_print_formatted(void)
+{
+    /* 解析一个复杂的 JSON */
+    const char *json_str = "{\"name\":\"John\",\"age\":30,\"is_student\":false,\"courses\":[\"math\",\"english\"],\"address\":{\"city\":\"Beijing\",\"street\":\"Main St\"}}";
+
+    cJSON *root = cJSON_Parse(json_str);
+    if (root == NULL) {
+        printf("Failed to parse JSON!\n");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("=== Test: cJSON_PrintFormatted ===\n\n");
+
+    /* Test 1: Default format (4 spaces) */
+    printf("Test 1: Default format (4 spaces)\n");
+    char *output1 = cJSON_PrintFormatted(root, NULL);
+    printf("%s\n\n", output1);
+    free(output1);
+
+    /* Test 2: 2 space indent */
+    printf("Test 2: 2 space indent\n");
+    cJSON_PrintOptions opts2 = {' ', 2};
+    char *output2 = cJSON_PrintFormatted(root, &opts2);
+    printf("%s\n\n", output2);
+    free(output2);
+
+    /* Test 3: Tab indent */
+    printf("Test 3: Tab indent\n");
+    cJSON_PrintOptions opts3 = {'\t', 1};
+    char *output3 = cJSON_PrintFormatted(root, &opts3);
+    printf("%s\n\n", output3);
+    free(output3);
+
+    /* Test 4: Compare with original cJSON_Print */
+    printf("Test 4: Original cJSON_Print (tab indent)\n");
+    char *output4 = cJSON_Print(root);
+    printf("%s\n\n", output4);
+    free(output4);
+
+    cJSON_Delete(root);
+    printf("Test passed!\n\n");
+}
+
 int CJSON_CDECL main(void)
 {
     /* print the version */
@@ -263,6 +307,9 @@ int CJSON_CDECL main(void)
 
     /* Now some samplecode for building objects concisely: */
     create_objects();
+
+    /* Test cJSON_PrintFormatted */
+    test_print_formatted();
 
     return 0;
 }

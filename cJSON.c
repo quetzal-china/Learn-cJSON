@@ -647,6 +647,8 @@ typedef struct
     cJSON_bool noalloc;     // 标记是否由外部提供缓冲区（若为 true，则不自动扩容）
     cJSON_bool format;      // 是否格式化输出（true=带换行和缩进，false=紧凑输出）
     internal_hooks hooks;   // 内存分配钩子（用于自定义内存管理）
+    char indent_char;      // 缩进字符：' ' (空格) 或 '\t' (制表符)
+    int indent_count;      // 每层缩进的字符数
 } printbuffer;
 
 /* realloc printbuffer if necessary to have at least "needed" bytes more */
@@ -1471,6 +1473,9 @@ static unsigned char *print(const cJSON * const item, cJSON_bool format, const i
     buffer->length = default_buffer_size;
     buffer->format = format;
     buffer->hooks = *hooks;
+    /* 默认使用制表符缩进，保持与原有 cJSON_Print 行为一致 */
+    buffer->indent_char = '\t';
+    buffer->indent_count = 1;
     if (buffer->buffer == NULL)
     {
         goto fail;
@@ -1536,9 +1541,48 @@ CJSON_PUBLIC(char *) cJSON_PrintUnformatted(const cJSON *item)
     return (char*)print(item, false, &global_hooks);
 }
 
+/* Render a cJSON item to text with custom formatting options. */
+CJSON_PUBLIC(char *) cJSON_PrintFormatted(const cJSON *item, const cJSON_PrintOptions *options)
+{
+    printbuffer p = { 0, 0, 0, 0, 0, 0, { 0, 0, 0 }, '\t', 1 };
+
+    /* 设置默认选项 */
+    if (options != NULL)
+    {
+        p.indent_char = options->indent_char;
+        p.indent_count = options->indent_count;
+    }
+    else
+    {
+        /* 默认使用4空格缩进 */
+        p.indent_char = ' ';
+        p.indent_count = 4;
+    }
+
+    p.buffer = (unsigned char*)global_hooks.allocate(256);
+    if (p.buffer == NULL)
+    {
+        return NULL;
+    }
+
+    p.length = 256;
+    p.offset = 0;
+    p.noalloc = false;
+    p.format = true;
+    p.hooks = global_hooks;
+
+    if (!print_value(item, &p))
+    {
+        global_hooks.deallocate(p.buffer);
+        return NULL;
+    }
+
+    return (char*)p.buffer;
+}
+
 CJSON_PUBLIC(char *) cJSON_PrintBuffered(const cJSON *item, int prebuffer, cJSON_bool fmt)
 {
-    printbuffer p = { 0, 0, 0, 0, 0, 0, { 0, 0, 0 } };
+    printbuffer p = { 0, 0, 0, 0, 0, 0, { 0, 0, 0 }, '\t', 1 };
 
     if (prebuffer < 0)
     {
@@ -1569,7 +1613,7 @@ CJSON_PUBLIC(char *) cJSON_PrintBuffered(const cJSON *item, int prebuffer, cJSON
 
 CJSON_PUBLIC(cJSON_bool) cJSON_PrintPreallocated(cJSON *item, char *buffer, const int length, const cJSON_bool format)
 {
-    printbuffer p = { 0, 0, 0, 0, 0, 0, { 0, 0, 0 } };
+    printbuffer p = { 0, 0, 0, 0, 0, 0, { 0, 0, 0 }, '\t', 1 };
 
     if ((length < 0) || (buffer == NULL))
     {
@@ -2227,17 +2271,21 @@ static cJSON_bool print_object(const cJSON * const item, printbuffer * const out
     {
         if (output_buffer->format)
         {
-            size_t i;
-            output_pointer = ensure(output_buffer, output_buffer->depth);
+            size_t i, j;
+            size_t indent_len = output_buffer->depth * (size_t)output_buffer->indent_count;
+            output_pointer = ensure(output_buffer, indent_len);
             if (output_pointer == NULL)
             {
                 return false;
             }
             for (i = 0; i < output_buffer->depth; i++)
             {
-                *output_pointer++ = '\t';
+                for (j = 0; j < (size_t)output_buffer->indent_count; j++)
+                {
+                    *output_pointer++ = output_buffer->indent_char;
+                }
             }
-            output_buffer->offset += output_buffer->depth;
+            output_buffer->offset += indent_len;
         }
 
         /* print key */
@@ -2256,7 +2304,7 @@ static cJSON_bool print_object(const cJSON * const item, printbuffer * const out
         *output_pointer++ = ':';
         if (output_buffer->format)
         {
-            *output_pointer++ = '\t';
+            *output_pointer++ = ' ';  /* 键值对分隔符后加一个空格 */
         }
         output_buffer->offset += length;
 
@@ -2289,17 +2337,20 @@ static cJSON_bool print_object(const cJSON * const item, printbuffer * const out
         current_item = current_item->next;
     }
 
-    output_pointer = ensure(output_buffer, output_buffer->format ? (output_buffer->depth + 1) : 2);
+    output_pointer = ensure(output_buffer, output_buffer->format ? (output_buffer->depth * (size_t)output_buffer->indent_count + 1) : 2);
     if (output_pointer == NULL)
     {
         return false;
     }
     if (output_buffer->format)
     {
-        size_t i;
+        size_t i, j;
         for (i = 0; i < (output_buffer->depth - 1); i++)
         {
-            *output_pointer++ = '\t';
+            for (j = 0; j < (size_t)output_buffer->indent_count; j++)
+            {
+                *output_pointer++ = output_buffer->indent_char;
+            }
         }
     }
     *output_pointer++ = '}';

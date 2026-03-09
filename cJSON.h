@@ -386,6 +386,45 @@ CJSON_PUBLIC(char *) cJSON_PrintBuffered(const cJSON *item, int prebuffer, cJSON
  * - 调用者完全负责缓冲区管理
  */
 CJSON_PUBLIC(cJSON_bool) cJSON_PrintPreallocated(cJSON *item, char *buffer, const int length, const cJSON_bool format);
+
+/* ===========================================================================
+ * 格式化输出选项结构体
+ * ===========================================================================
+ * 用于 cJSON_PrintFormatted 函数的自定义格式化配置
+ * ===========================================================================
+ */
+typedef struct
+{
+    char indent_char;      /* 缩进字符: ' ' (空格) 或 '\t' (制表符) */
+    int indent_count;      /* 缩进数量: 每层嵌套缩进的字符数 */
+} cJSON_PrintOptions;
+
+/* ===========================================================================
+ * 格式化输出函数
+ * ===========================================================================
+ * 支持自定义缩进风格的 JSON 序列化
+ * ===========================================================================
+ */
+
+/* @brief 格式化输出 JSON 字符串（自定义缩进）
+ * @param item 要序列化的 cJSON 根节点
+ * @param options 格式化选项（若为 NULL，使用默认选项：4空格缩进）
+ * @return 格式化后的 JSON 字符串，失败返回 NULL
+ *
+ * 示例:
+ * cJSON *json = cJSON_Parse("{\"name\":\"John\",\"age\":30}");
+ * cJSON_PrintOptions opts = {' ', 2};  // 2空格缩进
+ * char *str = cJSON_PrintFormatted(json, &opts);
+ * // 输出:
+ * // {
+ * //   "name": "John",
+ * //   "age": 30
+ * // }
+ *
+ * 注意: 返回的字符串必须用 free 释放
+ */
+CJSON_PUBLIC(char *) cJSON_PrintFormatted(const cJSON *item, const cJSON_PrintOptions *options);
+
 /* ===========================================================================
  * 删除/释放函数
  * ===========================================================================
