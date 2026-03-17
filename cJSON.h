@@ -395,8 +395,18 @@ CJSON_PUBLIC(cJSON_bool) cJSON_PrintPreallocated(cJSON *item, char *buffer, cons
  */
 typedef struct
 {
-    char indent_char;      /* 缩进字符: ' ' (空格) 或 '\t' (制表符) */
-    int indent_count;      /* 缩进数量: 每层嵌套缩进的字符数 */
+    /* 基础格式化选项 */
+    char indent_char;      /* 缩进字符: ' ' (空格) 或 '\t' (制表符)，默认 ' ' */
+    int indent_count;      /* 缩进数量: 每层嵌套缩进的字符数，默认 4 */
+    
+    /* 高级格式化选项 */
+    cJSON_bool sort_keys;       /* 是否按键名排序（字典序），默认 false */
+    cJSON_bool compact_arrays;  /* 是否紧凑输出数组（单行），默认 false */
+    cJSON_bool compact_objects; /* 是否紧凑输出对象（单行），默认 false */
+    cJSON_bool trailing_newline;/* 是否在末尾添加换行符，默认 true */
+    cJSON_bool ensure_ascii;    /* 是否转义非 ASCII 字符（如中文），默认 false */
+    cJSON_bool space_after_colon;/* 是否在冒号后添加空格，默认 true */
+    cJSON_bool space_after_comma;/* 是否在逗号后添加空格，默认 true */
 } cJSON_PrintOptions;
 
 /* ===========================================================================

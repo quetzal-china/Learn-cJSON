@@ -126,6 +126,7 @@
 ## 编译与运行
 
 ### 环境要求
+- 操作系统：Ubuntu 20.04
 - GCC 编译器
 - GDB 调试器（可选，用于动态学习）
 
@@ -172,6 +173,156 @@ Courses: math english
 
 ---
 
+## 功能扩展
+
+在深入理解 cJSON 源码的基础上，我尝试实现了一些新功能：
+
+### JSON Path 查询
+
+实现了简单的 JSON Path 查询功能，支持通过路径表达式访问节点。
+
+**支持语法**：
+- `$.key` - 对象键访问
+- `$[0]` - 数组索引访问
+- `$.a.b[0]` - 混合访问
+
+**API 使用示例**：
+```c
+#include "cJSON.h"
+#include "cJSON_path.h"
+
+int main() {
+    const char *json = "{\"server\":{\"host\":\"localhost\",\"port\":8080}}";
+    cJSON *root = cJSON_Parse(json);
+    
+    // 基本查询
+    cJSON *host = cJSON_GetPath(root, "$.server.host");
+    printf("Host: %s\n", host->valuestring);  // localhost
+    
+    // 直接获取值
+    int port = cJSON_GetPathInt(root, "$.server.port");
+    printf("Port: %d\n", port);  // 8080
+    
+    cJSON_Delete(root);
+    return 0;
+}
+```
+
+**编译**：
+
+Linux:
+```bash
+gcc -o test test.c cJSON.c cJSON_path.c -lm
+./test
+```
+
+Windows:
+```bash
+gcc -o test.exe test.c cJSON.c cJSON_path.c
+test
+```
+
+**相关文件**：
+- `cJSON_path.h` - JSON Path 头文件
+- `cJSON_path.c` - 实现代码
+- `test_path.c` - 测试程序
+
+### JSON 格式化工具
+
+实现了一个命令行工具，支持格式化输出和路径查询。
+
+**编译**：
+
+Linux:
+```bash
+gcc -o json_formatter json_formatter.c cJSON.c cJSON_path.c -lm
+```
+
+Windows:
+```bash
+gcc -o json_formatter.exe json_formatter.c cJSON.c cJSON_path.c
+```
+
+**使用方法**：
+
+Linux:
+```bash
+# 基本格式化（默认4空格缩进）
+./json_formatter input.json
+
+# 指定缩进（2空格）
+./json_formatter -i 2 input.json
+
+# 使用制表符
+./json_formatter -t input.json
+
+# 紧凑输出（不换行）
+./json_formatter -c input.json
+
+# 路径查询
+./json_formatter -p '$.server.port' input.json
+
+# 输出到文件
+./json_formatter -o output.json input.json
+
+# 从标准输入读取
+cat input.json | ./json_formatter -i 2
+
+# 显示帮助
+./json_formatter -h
+```
+
+Windows:
+```bash
+# 基本格式化（默认4空格缩进）
+json_formatter input.json
+
+# 指定缩进（2空格）
+json_formatter -i 2 input.json
+
+# 使用制表符
+json_formatter -t input.json
+
+# 紧凑输出（不换行）
+json_formatter -c input.json
+
+# 路径查询
+json_formatter -p "$.server.port" input.json
+
+# 输出到文件
+json_formatter -o output.json input.json
+
+# 显示帮助
+json_formatter -h
+```
+
+**相关文件**：
+- `json_formatter.c` - 工具实现
+
+### 扩展的格式化选项
+
+在原有 `cJSON_PrintFormatted` 的基础上，扩展了格式化选项结构体，支持更多配置（键名排序、紧凑输出等）。
+
+**使用示例**：
+```c
+cJSON *root = cJSON_Parse("{\"name\":\"John\",\"age\":30}");
+
+// 默认格式化（4空格）
+char *out1 = cJSON_Print(root);
+
+// 自定义格式化（2空格）
+cJSON_PrintOptions opts = {' ', 2};  // 2空格缩进
+char *out2 = cJSON_PrintFormatted(root, &opts);
+
+// 紧凑输出
+char *out3 = cJSON_PrintUnformatted(root);
+
+// 记得释放
+free(out1); free(out2); free(out3);
+```
+
+---
+
 ## 后续计划
 
 - [ ] 继续追踪 `cJSON_Print` 序列化流程
@@ -195,7 +346,7 @@ Courses: math english
 - 学生：[liuyuxin]
 - 专业：软件工程
 - 年级：大一
-- 完成日期：2026-02-14
+- 完成日期：2026-03-17
 
 > 本项目所有代码和笔记均为学习研究用途，遵循 cJSON 的 MIT 开源协议。
 
